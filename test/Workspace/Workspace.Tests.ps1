@@ -57,6 +57,7 @@ Describe 'Workspace' {
 
         $node | Should -Not -BeNullOrEmpty
         $node | Should -BeOfType ([WorkspaceRepository])
+        ($node -is [WorkspaceChild]) | Should -BeTrue
         $node.repository | Should -Be 'example/api'
         $node.name | Should -Be 'api'
         $node.path | Should -Be 'api'
@@ -74,6 +75,7 @@ Describe 'Workspace' {
 
         $node | Should -Not -BeNullOrEmpty
         $node | Should -BeOfType ([WorkspaceLogicalParent])
+        ($node -is [WorkspaceChild]) | Should -BeTrue
         $node.path | Should -Be 'platform'
         $node.children | Should -HaveCount 2
     }

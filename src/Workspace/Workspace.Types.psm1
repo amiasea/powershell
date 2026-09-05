@@ -1,6 +1,6 @@
-interface IWorkspaceChild {}
+class WorkspaceChild {}
 
-class WorkspaceRepository : IWorkspaceChild {
+class WorkspaceRepository : WorkspaceChild {
     [string]$type = 'repository'
     [string]$repository
     [string]$name
@@ -8,7 +8,7 @@ class WorkspaceRepository : IWorkspaceChild {
     [string]$clone_url
 }
 
-class WorkspaceLogicalParent : IWorkspaceChild {
+class WorkspaceLogicalParent : WorkspaceChild {
     [string]$type = 'logical_parent'
     [string]$name
     [string]$path
@@ -17,5 +17,5 @@ class WorkspaceLogicalParent : IWorkspaceChild {
 
 class Workspace {
     [string]$root
-    [IWorkspaceChild[]]$children
+    [WorkspaceChild[]]$children
 }
