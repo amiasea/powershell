@@ -66,7 +66,7 @@ jobs:
           # Copy the module source into the build output.
           Get-ChildItem -Path $modulePath -Force |
               Where-Object {
-                  $_.Name -ne "$env:MODULE.module.json" -and
+                  $_.Name -ne "$env:MODULE.json" -and
                   $_.Name -ne "$env:MODULE.psd1"
               } |
               Copy-Item -Destination $outPath -Recurse -Force
@@ -80,7 +80,7 @@ jobs:
           MODULE: ${{ steps.tag.outputs.module }}
         run: |
           $modulePath = Join-Path $PWD "src/$env:MODULE"
-          $metadataPath = Join-Path $modulePath "$env:MODULE.module.json"
+          $metadataPath = Join-Path $modulePath "$env:MODULE.json"
 
           $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
 
@@ -109,7 +109,7 @@ jobs:
           MODULE: ${{ steps.tag.outputs.module }}
         run: |
           $modulePath = Join-Path $PWD "src/$env:MODULE"
-          $metadataPath = Join-Path $modulePath "$env:MODULE.module.json"
+          $metadataPath = Join-Path $modulePath "$env:MODULE.json"
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $projectPath = Join-Path $buildPath "$env:MODULE.csproj"
           $packagesPath = Join-Path $buildPath "packages"
@@ -167,7 +167,7 @@ jobs:
           MODULE: ${{ steps.tag.outputs.module }}
         run: |
           $modulePath = Join-Path $PWD "src/$env:MODULE"
-          $metadataPath = Join-Path $modulePath "$env:MODULE.module.json"
+          $metadataPath = Join-Path $modulePath "$env:MODULE.json"
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $assetsPath = Join-Path $buildPath "obj/project.assets.json"
           $packagesPath = Join-Path $buildPath "packages"
@@ -351,7 +351,7 @@ jobs:
           VERSION: ${{ steps.tag.outputs.version }}
         run: |
           $modulePath = Join-Path $PWD "src/$env:MODULE"
-          $metadataPath = Join-Path $modulePath "$env:MODULE.module.json"
+          $metadataPath = Join-Path $modulePath "$env:MODULE.json"
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $outPath = Join-Path $buildPath "out"
           $manifestPath = Join-Path $outPath "$env:MODULE.psd1"
