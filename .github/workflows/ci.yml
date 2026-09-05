@@ -576,6 +576,59 @@ jobs:
               throw "Native runtime directory not found: $nativePath"
           }
 
+                    $nativeLibrary = Join-Path `
+              $nativePath `
+              "libgit2-5853918.so"
+
+          Write-Host ""
+          Write-Host "Checking exact native library:"
+          Write-Host "  $nativeLibrary"
+
+          if (-not (Test-Path $nativeLibrary -PathType Leaf)) {
+              throw "Expected native library not found: $nativeLibrary"
+          }
+
+          $nativeFile = Get-Item $nativeLibrary
+
+          Write-Host "  Exists: $($nativeFile.Exists)"
+          Write-Host "  Size:   $($nativeFile.Length) bytes"
+
+          Write-Host ""
+          Write-Host "Attempting direct native load with System.Runtime.InteropServices.NativeLibrary..."
+
+          try {
+              $nativeHandle = [System.Runtime.InteropServices.NativeLibrary]::Load(
+                  $nativeLibrary
+              )
+
+              if ($nativeHandle -eq [IntPtr]::Zero) {
+                  throw "NativeLibrary.Load returned a null handle."
+              }
+
+              Write-Host "  NativeLibrary.Load succeeded."
+              Write-Host "  Handle: $nativeHandle"
+
+              [System.Runtime.InteropServices.NativeLibrary]::Free(
+                  $nativeHandle
+              )
+
+              Write-Host "  Native library unloaded successfully."
+          }
+          catch {
+              Write-Host ""
+              Write-Host "=== DIRECT NATIVE LOAD FAILED ==="
+              Write-Host "Exception type: $($_.Exception.GetType().FullName)"
+              Write-Host "Exception message: $($_.Exception.Message)"
+              throw
+          }
+
+          Write-Host ""
+          Write-Host "Configuring LibGit2Sharp native library path..."
+
+          [LibGit2Sharp.GlobalSettings]::NativeLibraryPath = $nativePath
+
+          Write-Host "  Configured path: $([LibGit2Sharp.GlobalSettings]::NativeLibraryPath)"
+
           [LibGit2Sharp.GlobalSettings]::NativeLibraryPath = $nativePath
 
           Write-Host "  Native library path configured."
