@@ -1,4 +1,3 @@
-. $PSScriptRoot/Workspace.Types.ps1
 . $PSScriptRoot/Resolve.Workspace.ps1
 . $PSScriptRoot/Build.Workspace.ps1
 
