@@ -1,3 +1,5 @@
+using module ../../.build/Workspace/out/Workspace.psd1
+
 BeforeAll {
     $modulePath = Join-Path $PSScriptRoot '../../.build/Workspace/out/Workspace.psd1'
 
@@ -129,7 +131,7 @@ Describe 'Workspace' {
         Should -Invoke `
             -CommandName git `
             -ModuleName Workspace `
-            -Times 3 `
+            -Times 4 `
             -Exactly `
             -ParameterFilter {
                 $args[0] -eq 'clone'
