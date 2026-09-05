@@ -348,12 +348,11 @@ jobs:
           $outPath = Join-Path $buildPath "out"
           $manifestPath = Join-Path $outPath "$env:MODULE.psd1"
           $rootModule = "$env:MODULE.psm1"
+          $rootModulePath = Join-Path $outPath $rootModule
 
           if (-not (Test-Path $metadataPath -PathType Leaf)) {
               throw "Module metadata not found: $metadataPath"
           }
-
-          $rootModulePath = Join-Path $outPath $rootModule
 
           if (-not (Test-Path $rootModulePath -PathType Leaf)) {
               throw "Module file not found: $rootModulePath"
@@ -369,28 +368,47 @@ jobs:
 
           $requiredModules = @(
               foreach ($requiredModule in @($metadata.requiredModules)) {
-                  @{
-                      ModuleName    = $requiredModule.moduleName
-                      ModuleVersion = $requiredModule.moduleVersion
-                  }
+                  @(
+                      @{
+                          ModuleName    = $requiredModule.moduleName
+                          ModuleVersion = $requiredModule.moduleVersion
+                      }
+                  )
               }
           )
+
+          $tokens = $null
+          $errors = $null
+
+          $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+              $rootModulePath,
+              [ref]$tokens,
+              [ref]$errors
+          )
+
+          if ($errors) {
+              throw "Parse errors in ${rootModulePath}: $($errors -join '; ')"
+          }
 
           $nestedModules = @(
-              foreach ($nestedModule in @($metadata.nestedModules)) {
-                  if (-not $nestedModule) {
-                      throw "Nested module entry cannot be empty."
-                  }
-
-                  $nestedModulePath = Join-Path $outPath $nestedModule
-
-                  if (-not (Test-Path $nestedModulePath -PathType Leaf)) {
-                      throw "Nested module file not found in build output: $nestedModulePath"
-                  }
-
-                  $nestedModule
-              }
+              $ast.UsingStatements |
+                  Where-Object {
+                      $_.UsingStatementKind -eq 'Module' -and
+                      $_.Name.Value -match '^\.[/\\]'
+                  } |
+                  ForEach-Object {
+                      $_.Name.Value -replace '^\.[/\\]', ''
+                  } |
+                  Select-Object -Unique
           )
+
+          foreach ($nestedModule in $nestedModules) {
+              $nestedModulePath = Join-Path $outPath $nestedModule
+
+              if (-not (Test-Path $nestedModulePath -PathType Leaf)) {
+                  throw "Nested module file not found in build output: $nestedModulePath"
+              }
+          }
 
           # RequiredAssemblies contains managed assemblies only.
           # Native binaries remain under runtimes/ and are not declared here.

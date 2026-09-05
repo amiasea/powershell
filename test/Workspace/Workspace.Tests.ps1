@@ -1,3 +1,4 @@
+using module ../../.build/Workspace/out/Workspace.Types.psm1
 using module ../../.build/Workspace/out/Workspace.psd1
 
 BeforeAll {

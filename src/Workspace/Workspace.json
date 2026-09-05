@@ -11,8 +11,5 @@
       "packageName": "LibGit2Sharp",
       "packageVersion": "0.32.0"
     }
-  ],
-  "nestedModules": [
-    "Workspace.Types.psm1"
   ]
 }
