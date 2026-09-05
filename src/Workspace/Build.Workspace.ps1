@@ -22,11 +22,9 @@ function Build-Workspace {
                         continue
                     }
 
-                    git clone $node.clone_url $target
-
-                    if ($LASTEXITCODE -ne 0) {
-                        throw "Failed to clone $($node.repository) to $target"
-                    }
+                    Invoke-WorkspaceGitClone `
+                        -Url $node.clone_url `
+                        -Path $target
                 }
 
                 'logical_parent' {
@@ -53,11 +51,9 @@ function Build-Workspace {
                             continue
                         }
 
-                        git clone $repository.clone_url $target
-
-                        if ($LASTEXITCODE -ne 0) {
-                            throw "Failed to clone $($repository.repository) to $target"
-                        }
+                        Invoke-WorkspaceGitClone `
+                            -Url $repository.clone_url `
+                            -Path $target
                     }
                 }
 

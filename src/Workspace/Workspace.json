@@ -8,8 +8,8 @@
   ],
   "packageReferences": [
     {
-      "packageName": "LibGit2Sharp",
-      "packageVersion": "0.32.0"
+      "packageName": "LibGit2Sharp.NativeBinaries",
+      "packageVersion": "2.0.324"
     }
   ]
 }

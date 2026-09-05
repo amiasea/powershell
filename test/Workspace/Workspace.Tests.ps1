@@ -121,10 +121,9 @@ Describe 'Workspace' {
         $workspace.root = $workspaceRoot
 
         Mock `
-            -CommandName git `
+            -CommandName Invoke-WorkspaceGitClone `
             -ModuleName Workspace `
             -MockWith {
-                $global:LASTEXITCODE = 0
             }
 
         Build-Workspace -Workspace $workspace
@@ -132,12 +131,9 @@ Describe 'Workspace' {
         $workspaceRoot | Should -Exist
 
         Should -Invoke `
-            -CommandName git `
+            -CommandName Invoke-WorkspaceGitClone `
             -ModuleName Workspace `
             -Times 4 `
-            -Exactly `
-            -ParameterFilter {
-                $args[0] -eq 'clone'
-            }
+            -Exactly
     }
 }
