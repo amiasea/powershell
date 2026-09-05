@@ -1,7 +1,5 @@
 BeforeAll {
-    $modulePath = Join-Path `
-        $PSScriptRoot `
-        '../../src/Workspace/Workspace.psd1'
+    $modulePath = Join-Path $PSScriptRoot '../../.build/Workspace/out/Workspace.psd1'
 
     Import-Module $modulePath -Force
 }
