@@ -124,9 +124,20 @@ Describe 'Workspace' {
             -CommandName Invoke-WorkspaceGitClone `
             -ModuleName Workspace `
             -MockWith {
+                New-Item -ItemType Directory -Path $Path -Force | Out-Null
+                New-Item -ItemType Directory -Path (Join-Path $Path '.git') -Force | Out-Null
             }
 
         Build-Workspace -Workspace $workspace
+
+        Write-Host ""
+        Write-Host "Built workspace:"
+        Get-ChildItem `
+            -Path $workspaceRoot `
+            -Recurse |
+            ForEach-Object {
+                Write-Host "  $($_.FullName.Substring($workspaceRoot.Length + 1))"
+            }
 
         $workspaceRoot | Should -Exist
 
