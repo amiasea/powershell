@@ -1,0 +1,15 @@
+{
+  "guid": "685b7ca3-a866-4b68-b522-6fa02c6e0155",
+  "requiredModules": [
+    {
+      "moduleName": "PowerShellForGitHub",
+      "moduleVersion": "0.17.0"
+    }
+  ],
+  "packageReferences": [
+    {
+      "packageName": "LibGit2Sharp",
+      "packageVersion": "0.32.0"
+    }
+  ]
+}

@@ -1,0 +1,686 @@
+name: CI
+
+on:
+  push:
+    tags:
+      - '*-v*.*.*'
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Parse tag
+        id: tag
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ($env:TAG -notmatch '^(?<module>.+)-v(?<version>\d+\.\d+\.\d+)$') {
+              throw "Invalid module tag: $env:TAG"
+          }
+
+          $module = $Matches.module
+          $version = $Matches.version
+
+          "module=$module" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+          Write-Host "Module:  $module"
+          Write-Host "Version: $version"
+
+      - name: Prepare build
+        shell: pwsh
+        env:
+          MODULE: ${{ steps.tag.outputs.module }}
+        run: |
+          $modulePath = Join-Path $PWD "src/$env:MODULE"
+          $metadataPath = Join-Path $modulePath "$env:MODULE.module.json"
+          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $outPath = Join-Path $buildPath "out"
+          $packagesPath = Join-Path $buildPath "packages"
+
+          if (-not (Test-Path $modulePath -PathType Container)) {
+              throw "Module directory not found: $modulePath"
+          }
+
+          if (-not (Test-Path $metadataPath -PathType Leaf)) {
+              throw "Module metadata not found: $metadataPath"
+          }
+
+          New-Item -ItemType Directory -Path $buildPath -Force | Out-Null
+          New-Item -ItemType Directory -Path $outPath -Force | Out-Null
+          New-Item -ItemType Directory -Path $packagesPath -Force | Out-Null
+
+          # Copy the module source into the build output.
+          Get-ChildItem -Path $modulePath -Force |
+              Where-Object {
+                  $_.Name -ne "$env:MODULE.module.json" -and
+                  $_.Name -ne "$env:MODULE.psd1"
+              } |
+              Copy-Item -Destination $outPath -Recurse -Force
+
+          Write-Host "Build output: $outPath"
+          Write-Host "NuGet packages: $packagesPath"
+
+      - name: Install required PowerShell modules
+        shell: pwsh
+        env:
+          MODULE: ${{ steps.tag.outputs.module }}
+        run: |
+          $modulePath = Join-Path $PWD "src/$env:MODULE"
+          $metadataPath = Join-Path $modulePath "$env:MODULE.module.json"
+
+          $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
+
+          foreach ($requiredModule in @($metadata.requiredModules)) {
+              if (-not $requiredModule.moduleName) {
+                  throw "Required PowerShell module is missing moduleName."
+              }
+
+              if (-not $requiredModule.moduleVersion) {
+                  throw "Required PowerShell module '$($requiredModule.moduleName)' is missing moduleVersion."
+              }
+
+              Write-Host "Installing $($requiredModule.moduleName) $($requiredModule.moduleVersion)..."
+
+              Install-PSResource `
+                  -Name $requiredModule.moduleName `
+                  -Version $requiredModule.moduleVersion `
+                  -Repository PSGallery `
+                  -TrustRepository `
+                  -Scope CurrentUser
+          }
+
+      - name: Restore NuGet package references
+        shell: pwsh
+        env:
+          MODULE: ${{ steps.tag.outputs.module }}
+        run: |
+          $modulePath = Join-Path $PWD "src/$env:MODULE"
+          $metadataPath = Join-Path $modulePath "$env:MODULE.module.json"
+          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $projectPath = Join-Path $buildPath "$env:MODULE.csproj"
+          $packagesPath = Join-Path $buildPath "packages"
+
+          $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
+          $packageReferences = @($metadata.packageReferences)
+
+          if ($packageReferences.Count -eq 0) {
+              Write-Host "No NuGet package references declared."
+              exit 0
+          }
+
+          $references = foreach ($package in $packageReferences) {
+              if (-not $package.packageName) {
+                  throw "NuGet package reference is missing packageName."
+              }
+
+              if (-not $package.packageVersion) {
+                  throw "NuGet package '$($package.packageName)' is missing packageVersion."
+              }
+
+              @"
+              <PackageReference Include="$($package.packageName)" Version="$($package.packageVersion)" />
+          "@
+          }
+
+          $project = @"
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <TargetFramework>net8.0</TargetFramework>
+              <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+            </PropertyGroup>
+
+            <ItemGroup>
+          $($references -join "`n")
+            </ItemGroup>
+          </Project>
+          "@
+
+          Set-Content `
+              -Path $projectPath `
+              -Value $project `
+              -Encoding utf8
+
+          Write-Host "Generated restore project:"
+          Write-Host $project
+
+          dotnet restore `
+              $projectPath `
+              --packages $packagesPath
+
+      - name: Materialize NuGet assets
+        shell: pwsh
+        env:
+          MODULE: ${{ steps.tag.outputs.module }}
+        run: |
+          $modulePath = Join-Path $PWD "src/$env:MODULE"
+          $metadataPath = Join-Path $modulePath "$env:MODULE.module.json"
+          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $assetsPath = Join-Path $buildPath "obj/project.assets.json"
+          $packagesPath = Join-Path $buildPath "packages"
+          $outPath = Join-Path $buildPath "out"
+          $libPath = Join-Path $outPath "lib"
+          $runtimePath = Join-Path $outPath "runtimes"
+
+          $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
+          $packageReferences = @($metadata.packageReferences)
+
+          if ($packageReferences.Count -eq 0) {
+              Write-Host "No NuGet package references to materialize."
+              exit 0
+          }
+
+          if (-not (Test-Path $assetsPath -PathType Leaf)) {
+              throw "NuGet assets file not found: $assetsPath"
+          }
+
+          $assets = Get-Content $assetsPath -Raw | ConvertFrom-Json
+
+          # The restore project targets net8.0. NuGet has already selected
+          # the compatible dependency graph for that target.
+          $target = $assets.targets.'net8.0'
+
+          if (-not $target) {
+              throw "NuGet restore did not produce a net8.0 target."
+          }
+
+          New-Item -ItemType Directory -Path $libPath -Force | Out-Null
+          New-Item -ItemType Directory -Path $runtimePath -Force | Out-Null
+
+          $packageLibraries = @(
+              $assets.libraries.PSObject.Properties |
+                  Where-Object { $_.Value.type -eq 'package' }
+          )
+
+          foreach ($library in $packageLibraries) {
+              if ($library.Name -notmatch '^(?<id>.+)/(?<version>[^/]+)$') {
+                  throw "Unable to parse NuGet package identity: $($library.Name)"
+              }
+
+              $packageName = $Matches.id
+              $packageVersion = $Matches.version
+
+              $packageRoot = Join-Path `
+                  $packagesPath `
+                  $packageName.ToLowerInvariant()
+
+              $packageRoot = Join-Path `
+                  $packageRoot `
+                  $packageVersion.ToLowerInvariant()
+
+              if (-not (Test-Path $packageRoot -PathType Container)) {
+                  throw "Restored package directory not found: $packageRoot"
+              }
+
+              Write-Host ""
+              Write-Host "Materializing package: $packageName $packageVersion"
+
+              $targetLibrary = $target.PSObject.Properties |
+                  Where-Object { $_.Name -eq $library.Name } |
+                  Select-Object -ExpandProperty Value -First 1
+
+              if (-not $targetLibrary) {
+                  Write-Host "  Package is not part of the net8.0 target assets."
+                  continue
+              }
+
+              # Prefer the highest-priority compatible TFM available in the
+              # package. This controls the managed assembly copied to lib/.
+              $tfmOrder = @(
+                  'net8.0',
+                  'net7.0',
+                  'net6.0',
+                  'netstandard2.1',
+                  'netstandard2.0',
+                  'net472'
+              )
+
+              $packageLibRoot = Join-Path $packageRoot "lib"
+              $selectedLib = $null
+
+              if (Test-Path $packageLibRoot -PathType Container) {
+                  $libDirectories = @(
+                      Get-ChildItem `
+                          -Path $packageLibRoot `
+                          -Directory
+                  )
+
+                  foreach ($tfm in $tfmOrder) {
+                      $candidate = $libDirectories |
+                          Where-Object { $_.Name -eq $tfm } |
+                          Select-Object -First 1
+
+                      if ($candidate) {
+                          $selectedLib = $candidate
+                          break
+                      }
+                  }
+              }
+
+              if ($selectedLib) {
+                  $destinationLib = Join-Path $libPath $selectedLib.Name
+
+                  New-Item `
+                      -ItemType Directory `
+                      -Path $destinationLib `
+                      -Force | Out-Null
+
+                  Get-ChildItem `
+                      -Path $selectedLib.FullName `
+                      -File |
+                      Copy-Item `
+                          -Destination $destinationLib `
+                          -Force
+
+                  Write-Host "  Managed assets: lib/$($selectedLib.Name)"
+              }
+
+              # Runtime assets are intentionally merged into the output
+              # runtime tree. Native assets remain in their package RID
+              # layout, e.g. runtimes/win-x64/native/.
+              $packageRuntimeRoot = Join-Path $packageRoot "runtimes"
+
+              if (Test-Path $packageRuntimeRoot -PathType Container) {
+                  Get-ChildItem `
+                      -Path $packageRuntimeRoot `
+                      -Directory |
+                      ForEach-Object {
+                          $destinationRuntime = Join-Path `
+                              $runtimePath `
+                              $_.Name
+
+                          New-Item `
+                              -ItemType Directory `
+                              -Path $destinationRuntime `
+                              -Force | Out-Null
+
+                          Copy-Item `
+                              -Path (Join-Path $_.FullName '*') `
+                              -Destination $destinationRuntime `
+                              -Recurse `
+                              -Force
+                      }
+
+                  Write-Host "  Runtime assets: runtimes/"
+              }
+          }
+
+          Write-Host ""
+          Write-Host "Materialized managed assemblies:"
+
+          if (Test-Path $libPath -PathType Container) {
+              Get-ChildItem `
+                  -Path $libPath `
+                  -Filter '*.dll' `
+                  -Recurse |
+                  ForEach-Object {
+                      Write-Host "  $($_.FullName.Substring($outPath.Length + 1))"
+                  }
+          }
+
+          Write-Host ""
+          Write-Host "Materialized runtime assets:"
+
+          if (Test-Path $runtimePath -PathType Container) {
+              Get-ChildItem `
+                  -Path $runtimePath `
+                  -Recurse `
+                  -File |
+                  ForEach-Object {
+                      Write-Host "  $($_.FullName.Substring($outPath.Length + 1))"
+                  }
+          }
+
+      - name: Build module manifest
+        shell: pwsh
+        env:
+          MODULE: ${{ steps.tag.outputs.module }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          $modulePath = Join-Path $PWD "src/$env:MODULE"
+          $metadataPath = Join-Path $modulePath "$env:MODULE.module.json"
+          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $outPath = Join-Path $buildPath "out"
+          $manifestPath = Join-Path $outPath "$env:MODULE.psd1"
+          $rootModule = "$env:MODULE.psm1"
+
+          if (-not (Test-Path $metadataPath -PathType Leaf)) {
+              throw "Module metadata not found: $metadataPath"
+          }
+
+          $rootModulePath = Join-Path $outPath $rootModule
+
+          if (-not (Test-Path $rootModulePath -PathType Leaf)) {
+              throw "Module file not found: $rootModulePath"
+          }
+
+          $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
+
+          if (-not $metadata.guid) {
+              throw "Module metadata does not contain a guid: $metadataPath"
+          }
+
+          $guid = [Guid]$metadata.guid
+
+          $requiredModules = @(
+              foreach ($requiredModule in @($metadata.requiredModules)) {
+                  @{
+                      ModuleName    = $requiredModule.moduleName
+                      ModuleVersion = $requiredModule.moduleVersion
+                  }
+              }
+          )
+
+          # RequiredAssemblies contains managed assemblies only.
+          # Native binaries remain under runtimes/ and are not declared here.
+          $libPath = Join-Path $outPath "lib"
+
+          $requiredAssemblies = @(
+              if (Test-Path $libPath -PathType Container) {
+                  Get-ChildItem `
+                      -Path $libPath `
+                      -Filter '*.dll' `
+                      -Recurse |
+                      ForEach-Object {
+                          $_.FullName.Substring($outPath.Length + 1).Replace('\', '/')
+                      } |
+                      Sort-Object
+              }
+          )
+
+          Write-Host "Required PowerShell modules:"
+          foreach ($requiredModule in $requiredModules) {
+              Write-Host "  $($requiredModule.ModuleName) $($requiredModule.ModuleVersion)"
+          }
+
+          Write-Host ""
+          Write-Host "Required managed assemblies:"
+          foreach ($assembly in $requiredAssemblies) {
+              Write-Host "  $assembly"
+          }
+
+          New-ModuleManifest `
+              -Path $manifestPath `
+              -RootModule $rootModule `
+              -ModuleVersion $env:VERSION `
+              -Guid $guid `
+              -Author 'Amiasea' `
+              -CompanyName 'Amiasea' `
+              -Copyright 'Copyright © 2026 Amiasea' `
+              -Description "Amiasea $env:MODULE PowerShell module." `
+              -PowerShellVersion '7.6' `
+              -CompatiblePSEditions 'Core' `
+              -RequiredModules $requiredModules `
+              -RequiredAssemblies $requiredAssemblies `
+              -FunctionsToExport @(
+                  "Resolve-$env:MODULE"
+                  "Build-$env:MODULE"
+              ) `
+              -CmdletsToExport @() `
+              -AliasesToExport @() `
+              -VariablesToExport @() `
+              -ProjectUri 'https://github.com/amiasea/amiasea-powershell'
+
+          Write-Host ""
+          Write-Host "Generated: $manifestPath"
+
+      - name: Smoke test LibGit2Sharp native loading
+        shell: pwsh
+        env:
+          MODULE: ${{ steps.tag.outputs.module }}
+        run: |
+          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $outPath = Join-Path $buildPath "out"
+          $manifestPath = Join-Path $outPath "$env:MODULE.psd1"
+          $libPath = Join-Path $outPath "lib"
+          $runtimePath = Join-Path $outPath "runtimes"
+
+          Write-Host "=== LibGit2Sharp Smoke Test ==="
+          Write-Host ""
+
+          Write-Host "PowerShell:"
+          $PSVersionTable | Format-List | Out-String | Write-Host
+
+          Write-Host "Build artifact:"
+          Write-Host "  $outPath"
+
+          if (-not (Test-Path $manifestPath -PathType Leaf)) {
+              throw "Built module manifest not found: $manifestPath"
+          }
+
+          Write-Host ""
+          Write-Host "Managed assemblies in artifact:"
+          if (Test-Path $libPath -PathType Container) {
+              Get-ChildItem `
+                  -Path $libPath `
+                  -Filter '*.dll' `
+                  -Recurse |
+                  ForEach-Object {
+                      Write-Host "  $($_.FullName.Substring($outPath.Length + 1))"
+                  }
+          }
+          else {
+              Write-Host "  <none>"
+          }
+
+          Write-Host ""
+          Write-Host "Runtime assets in artifact:"
+          if (Test-Path $runtimePath -PathType Container) {
+              Get-ChildItem `
+                  -Path $runtimePath `
+                  -Recurse `
+                  -File |
+                  ForEach-Object {
+                      Write-Host "  $($_.FullName.Substring($outPath.Length + 1))"
+                  }
+          }
+          else {
+              Write-Host "  <none>"
+          }
+
+          Write-Host ""
+          Write-Host "Importing built module:"
+          Write-Host "  $manifestPath"
+
+          Import-Module $manifestPath -Force -ErrorAction Stop
+
+          Write-Host "  Module import succeeded."
+
+          Write-Host ""
+          Write-Host "Checking LibGit2Sharp managed type:"
+          $repositoryType = [LibGit2Sharp.Repository]
+
+          if (-not $repositoryType) {
+              throw "LibGit2Sharp.Repository type is unavailable after module import."
+          }
+
+          Write-Host "  Type: $($repositoryType.FullName)"
+          Write-Host "  Assembly: $($repositoryType.Assembly.FullName)"
+          Write-Host "  Assembly location: $($repositoryType.Assembly.Location)"
+
+          $expectedAssembly = Join-Path `
+              $outPath `
+              "lib/net8.0/LibGit2Sharp.dll"
+
+          if (Test-Path $expectedAssembly -PathType Leaf) {
+              $actualAssembly = [IO.Path]::GetFullPath($repositoryType.Assembly.Location)
+              $expectedAssembly = [IO.Path]::GetFullPath($expectedAssembly)
+
+              Write-Host "  Expected assembly: $expectedAssembly"
+              Write-Host "  Loaded assembly:   $actualAssembly"
+
+              if ($actualAssembly -ne $expectedAssembly) {
+                  throw "LibGit2Sharp was not loaded from the build artifact."
+              }
+
+              Write-Host "  Managed assembly location verified."
+          }
+          else {
+              Write-Host "  Expected net8.0 assembly path does not exist; continuing with loaded assembly verification."
+          }
+
+          Write-Host ""
+          Write-Host "Checking native runtime layout:"
+
+          if (-not (Test-Path $runtimePath -PathType Container)) {
+              throw "No runtimes directory exists in the build artifact."
+          }
+
+          $runtimeDirectories = @(
+              Get-ChildItem `
+                  -Path $runtimePath `
+                  -Directory
+          )
+
+          if ($runtimeDirectories.Count -eq 0) {
+              throw "The runtimes directory contains no RID directories."
+          }
+
+          foreach ($runtimeDirectory in $runtimeDirectories) {
+              Write-Host "  RID: $($runtimeDirectory.Name)"
+
+              $nativeDirectory = Join-Path `
+                  $runtimeDirectory.FullName `
+                  "native"
+
+              if (Test-Path $nativeDirectory -PathType Container) {
+                  Get-ChildItem `
+                      -Path $nativeDirectory `
+                      -File |
+                      ForEach-Object {
+                          Write-Host "    native/$($_.Name)"
+                      }
+              }
+          }
+
+          Write-Host ""
+          Write-Host "Forcing native LibGit2Sharp load by initializing a repository..."
+
+          $smokePath = Join-Path `
+              $env:RUNNER_TEMP `
+              "amiasea-libgit2sharp-smoke"
+
+          Remove-Item `
+              -Path $smokePath `
+              -Recurse `
+              -Force `
+              -ErrorAction SilentlyContinue
+
+          New-Item `
+              -ItemType Directory `
+              -Path $smokePath `
+              -Force | Out-Null
+
+          Write-Host "  Repository path: $smokePath"
+
+          try {
+              [LibGit2Sharp.Repository]::Init($smokePath)
+
+              Write-Host "  Repository initialization succeeded."
+
+              $isValid = [LibGit2Sharp.Repository]::IsValid($smokePath)
+
+              Write-Host "  Repository.IsValid(): $isValid"
+
+              if (-not $isValid) {
+                  throw "LibGit2Sharp initialized a repository but Repository.IsValid() returned false."
+              }
+
+              $repository = [LibGit2Sharp.Repository]::Open($smokePath)
+
+              try {
+                  Write-Host "  Repository.Open() succeeded."
+                  Write-Host "  HEAD: $($repository.Head.FriendlyName)"
+              }
+              finally {
+                  if ($repository) {
+                      $repository.Dispose()
+                  }
+              }
+          }
+          catch {
+              Write-Host ""
+              Write-Host "=== LibGit2Sharp native loading FAILED ==="
+              Write-Host "Exception type: $($_.Exception.GetType().FullName)"
+              Write-Host "Exception message: $($_.Exception.Message)"
+              Write-Host ""
+              Write-Host "Exception details:"
+              $_ | Format-List * -Force | Out-String | Write-Host
+
+              throw
+          }
+          finally {
+              Remove-Item `
+                  -Path $smokePath `
+                  -Recurse `
+                  -Force `
+                  -ErrorAction SilentlyContinue
+          }
+
+          Write-Host ""
+          Write-Host "=== LibGit2Sharp smoke test PASSED ==="
+          Write-Host "Managed assembly loaded from the build artifact."
+          Write-Host "Native LibGit2Sharp operation succeeded without explicit native-path initialization."
+
+      - name: Install Pester
+        shell: pwsh
+        run: |
+          Install-PSResource `
+              -Name Pester `
+              -Version 6.0.1 `
+              -Repository PSGallery `
+              -TrustRepository `
+              -Scope CurrentUser
+
+      - name: Test module
+        shell: pwsh
+        env:
+          MODULE: ${{ steps.tag.outputs.module }}
+        run: |
+          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $outPath = Join-Path $buildPath "out"
+          $manifestPath = Join-Path $outPath "$env:MODULE.psd1"
+          $testPath = Join-Path $PWD "test/$env:MODULE"
+
+          if (-not (Test-Path $manifestPath -PathType Leaf)) {
+              throw "Built module manifest not found: $manifestPath"
+          }
+
+          if (-not (Test-Path $testPath -PathType Container)) {
+              throw "Test directory not found: $testPath"
+          }
+
+          Import-Module $manifestPath -Force
+
+          Invoke-Pester `
+              -Path $testPath `
+              -Output Detailed
+
+      - name: Show build artifact
+        shell: pwsh
+        env:
+          MODULE: ${{ steps.tag.outputs.module }}
+        run: |
+          $outPath = Join-Path $PWD ".build/$env:MODULE/out"
+
+          Write-Host "Built module artifact:"
+          Get-ChildItem `
+              -Path $outPath `
+              -Recurse `
+              -File |
+              ForEach-Object {
+                  Write-Host "  $($_.FullName.Substring($outPath.Length + 1))"
+              }
