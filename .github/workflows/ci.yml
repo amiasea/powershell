@@ -63,7 +63,6 @@ jobs:
           New-Item -ItemType Directory -Path $outPath -Force | Out-Null
           New-Item -ItemType Directory -Path $packagesPath -Force | Out-Null
 
-          # Copy the module source into the build output.
           Get-ChildItem -Path $modulePath -Force |
               Where-Object {
                   $_.Name -ne "$env:MODULE.json" -and
@@ -189,8 +188,6 @@ jobs:
 
           $assets = Get-Content $assetsPath -Raw | ConvertFrom-Json
 
-          # The restore project targets net8.0. NuGet has already selected
-          # the compatible dependency graph for that target.
           $target = $assets.targets.'net8.0'
 
           if (-not $target) {
@@ -237,8 +234,6 @@ jobs:
                   continue
               }
 
-              # Prefer the highest-priority compatible TFM available in the
-              # package. This controls the managed assembly copied to lib/.
               $tfmOrder = @(
                   'net8.0',
                   'net7.0',
@@ -288,9 +283,6 @@ jobs:
                   Write-Host "  Managed assets: lib/$($selectedLib.Name)"
               }
 
-              # Runtime assets are intentionally merged into the output
-              # runtime tree. Native assets remain in their package RID
-              # layout, e.g. runtimes/win-x64/native/.
               $packageRuntimeRoot = Join-Path $packageRoot "runtimes"
 
               if (Test-Path $packageRuntimeRoot -PathType Container) {
@@ -463,6 +455,7 @@ jobs:
 
           Write-Host ""
           Write-Host "Managed assemblies in artifact:"
+
           if (Test-Path $libPath -PathType Container) {
               Get-ChildItem `
                   -Path $libPath `
@@ -478,6 +471,7 @@ jobs:
 
           Write-Host ""
           Write-Host "Runtime assets in artifact:"
+
           if (Test-Path $runtimePath -PathType Container) {
               Get-ChildItem `
                   -Path $runtimePath `
@@ -567,6 +561,26 @@ jobs:
           }
 
           Write-Host ""
+          Write-Host "Configuring LibGit2Sharp native library path..."
+
+          $rid = [System.Runtime.InteropServices.RuntimeInformation]::RuntimeIdentifier
+
+          $nativePath = Join-Path `
+              $outPath `
+              "runtimes/$rid/native"
+
+          Write-Host "  RID:  $rid"
+          Write-Host "  Path: $nativePath"
+
+          if (-not (Test-Path $nativePath -PathType Container)) {
+              throw "Native runtime directory not found: $nativePath"
+          }
+
+          [LibGit2Sharp.GlobalSettings]::NativeLibraryPath = $nativePath
+
+          Write-Host "  Native library path configured."
+
+          Write-Host ""
           Write-Host "Forcing native LibGit2Sharp load by initializing a repository..."
 
           $smokePath = Join-Path `
@@ -633,7 +647,7 @@ jobs:
           Write-Host ""
           Write-Host "=== LibGit2Sharp smoke test PASSED ==="
           Write-Host "Managed assembly loaded from the build artifact."
-          Write-Host "Native LibGit2Sharp operation succeeded without explicit native-path initialization."
+          Write-Host "Native LibGit2Sharp operation succeeded with explicit native-path initialization."
 
       - name: Install Pester
         shell: pwsh
@@ -677,6 +691,7 @@ jobs:
           $outPath = Join-Path $PWD ".build/$env:MODULE/out"
 
           Write-Host "Built module artifact:"
+
           Get-ChildItem `
               -Path $outPath `
               -Recurse `
