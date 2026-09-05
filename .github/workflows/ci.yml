@@ -677,10 +677,10 @@ jobs:
                   throw "LibGit2Sharp initialized a repository but Repository.IsValid() returned false."
               }
 
-              $repository = [LibGit2Sharp.Repository]::Open($smokePath)
+              $repository = [LibGit2Sharp.Repository]::new($smokePath)
 
               try {
-                  Write-Host "  Repository.Open() succeeded."
+                  Write-Host "  Repository instance created successfully."
                   Write-Host "  HEAD: $($repository.Head.FriendlyName)"
               }
               finally {
