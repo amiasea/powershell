@@ -625,13 +625,76 @@ jobs:
           Write-Host ""
           Write-Host "Configuring LibGit2Sharp native library path..."
 
-          [LibGit2Sharp.GlobalSettings]::NativeLibraryPath = $nativePath
+          Write-Host ""
+          Write-Host "Registering LibGit2Sharp native library resolver..."
 
-          Write-Host "  Configured path: $([LibGit2Sharp.GlobalSettings]::NativeLibraryPath)"
+          $libGit2SharpAssembly = [LibGit2Sharp.Repository].Assembly
 
-          [LibGit2Sharp.GlobalSettings]::NativeLibraryPath = $nativePath
+          [System.Runtime.InteropServices.NativeLibrary]::SetDllImportResolver(
+              $libGit2SharpAssembly,
+              {
+                  param(
+                      [string]$libraryName,
+                      [System.Reflection.Assembly]$assembly,
+                      [System.Runtime.InteropServices.DllImportSearchPath]$searchPath
+                  )
 
-          Write-Host "  Native library path configured."
+                  if ($libraryName -ne 'git2-5853918') {
+                      return [IntPtr]::Zero
+                  }
+
+                  $rid = [System.Runtime.InteropServices.RuntimeInformation]::RuntimeIdentifier
+
+                  $extension = switch ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+                      [System.Runtime.InteropServices.OSPlatform]::Windows
+                  )) {
+                      $true  { '.dll' }
+                      $false {
+                          if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+                              [System.Runtime.InteropServices.OSPlatform]::OSX
+                          )) {
+                              '.dylib'
+                          }
+                          else {
+                              '.so'
+                          }
+                      }
+                  }
+
+                  $prefix = if ($extension -eq '.dll') {
+                      ''
+                  }
+                  else {
+                      'lib'
+                  }
+
+                  $nativePath = Join-Path `
+                      $outPath `
+                      "runtimes/$rid/native/$prefix$libraryName$extension"
+
+                  Write-Host "  Requested: $libraryName"
+                  Write-Host "  RID:       $rid"
+                  Write-Host "  Resolving: $nativePath"
+
+                  if (-not (Test-Path $nativePath -PathType Leaf)) {
+                      throw "Native library not found: $nativePath"
+                  }
+
+                  $handle = [IntPtr]::Zero
+
+                  if (-not [System.Runtime.InteropServices.NativeLibrary]::TryLoad(
+                      $nativePath,
+                      [ref]$handle
+                  )) {
+                      throw "Unable to load native library: $nativePath"
+                  }
+
+                  Write-Host "  Native library loaded."
+                  return $handle
+              }
+          )
+
+          Write-Host "  Resolver registered."
 
           Write-Host ""
           Write-Host "Forcing native LibGit2Sharp load by initializing a repository..."
