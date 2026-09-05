@@ -376,6 +376,22 @@ jobs:
               }
           )
 
+          $nestedModules = @(
+              foreach ($nestedModule in @($metadata.nestedModules)) {
+                  if (-not $nestedModule) {
+                      throw "Nested module entry cannot be empty."
+                  }
+
+                  $nestedModulePath = Join-Path $outPath $nestedModule
+
+                  if (-not (Test-Path $nestedModulePath -PathType Leaf)) {
+                      throw "Nested module file not found in build output: $nestedModulePath"
+                  }
+
+                  $nestedModule
+              }
+          )
+
           # RequiredAssemblies contains managed assemblies only.
           # Native binaries remain under runtimes/ and are not declared here.
           $libPath = Join-Path $outPath "lib"
@@ -399,6 +415,12 @@ jobs:
           }
 
           Write-Host ""
+          Write-Host "Nested modules:"
+          foreach ($nestedModule in $nestedModules) {
+              Write-Host "  $nestedModule"
+          }
+
+          Write-Host ""
           Write-Host "Required managed assemblies:"
           foreach ($assembly in $requiredAssemblies) {
               Write-Host "  $assembly"
@@ -415,6 +437,7 @@ jobs:
               -Description "Amiasea $env:MODULE PowerShell module." `
               -PowerShellVersion '7.6' `
               -CompatiblePSEditions 'Core' `
+              -NestedModules $nestedModules `
               -RequiredModules $requiredModules `
               -RequiredAssemblies $requiredAssemblies `
               -FunctionsToExport @(
@@ -424,7 +447,7 @@ jobs:
               -CmdletsToExport @() `
               -AliasesToExport @() `
               -VariablesToExport @() `
-              -ProjectUri 'https://github.com/amiasea/amiasea-powershell'
+              -ProjectUri 'https://github.com/amiasea/powershell'
 
           Write-Host ""
           Write-Host "Generated: $manifestPath"
@@ -576,7 +599,7 @@ jobs:
               throw "Native runtime directory not found: $nativePath"
           }
 
-                    $nativeLibrary = Join-Path `
+          $nativeLibrary = Join-Path `
               $nativePath `
               "libgit2-5853918.so"
 
@@ -627,7 +650,6 @@ jobs:
 
           $nativePath = $nativeFile.Directory.FullName
 
-
           $nativeLibrary = Join-Path $nativePath 'libgit2-5853918.so'
           $nativeAlias = Join-Path $nativePath 'git2-5853918.so'
 
@@ -642,7 +664,6 @@ jobs:
           Write-Host "  Alias:  $nativeAlias"
 
           [LibGit2Sharp.GlobalSettings]::NativeLibraryPath = $nativePath
-
 
           Write-Host ""
           Write-Host "Forcing native LibGit2Sharp load by initializing a repository..."
