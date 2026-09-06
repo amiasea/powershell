@@ -102,35 +102,6 @@ jobs:
         with:
           dotnet-version: '10.x'
 
-      - name: Install required PowerShell modules
-        shell: pwsh
-        env:
-          MODULE: ${{ needs.prepare.outputs.module }}
-        run: |
-          $modulePath = Join-Path $PWD "src/$env:MODULE"
-          $metadataPath = Join-Path $modulePath "$env:MODULE.json"
-
-          $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
-
-          foreach ($requiredModule in @($metadata.requiredModules)) {
-              if (-not $requiredModule.moduleName) {
-                  throw "Required PowerShell module is missing moduleName."
-              }
-
-              if (-not $requiredModule.moduleVersion) {
-                  throw "Required PowerShell module '$($requiredModule.moduleName)' is missing moduleVersion."
-              }
-
-              Write-Host "Installing $($requiredModule.moduleName) $($requiredModule.moduleVersion)..."
-
-              Install-PSResource `
-                  -Name $requiredModule.moduleName `
-                  -Version $requiredModule.moduleVersion `
-                  -Repository PSGallery `
-                  -TrustRepository `
-                  -Scope CurrentUser
-          }
-
       - name: Restore NuGet package references
         shell: pwsh
         env:
@@ -142,7 +113,9 @@ jobs:
           $projectPath = Join-Path $buildPath "$env:MODULE.csproj"
           $packagesPath = Join-Path $buildPath "packages"
 
-          $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
+          $metadata = Get-Content $metadataPath -Raw |
+              ConvertFrom-Json
+
           $packageReferences = @($metadata.packageReferences)
 
           if ($packageReferences.Count -eq 0) {
@@ -607,6 +580,36 @@ jobs:
               -TrustRepository `
               -Scope CurrentUser
 
+      - name: Install required PowerShell modules
+        shell: pwsh
+        env:
+          MODULE: ${{ needs.prepare.outputs.module }}
+        run: |
+          $modulePath = Join-Path $PWD "src/$env:MODULE"
+          $metadataPath = Join-Path $modulePath "$env:MODULE.json"
+
+          $metadata = Get-Content $metadataPath -Raw |
+              ConvertFrom-Json
+
+          foreach ($requiredModule in @($metadata.requiredModules)) {
+              if (-not $requiredModule.moduleName) {
+                  throw "Required PowerShell module is missing moduleName."
+              }
+
+              if (-not $requiredModule.moduleVersion) {
+                  throw "Required PowerShell module '$($requiredModule.moduleName)' is missing moduleVersion."
+              }
+
+              Write-Host "Installing $($requiredModule.moduleName) $($requiredModule.moduleVersion)..."
+
+              Install-PSResource `
+                  -Name $requiredModule.moduleName `
+                  -Version $requiredModule.moduleVersion `
+                  -Repository PSGallery `
+                  -TrustRepository `
+                  -Scope CurrentUser
+          }
+
       - name: Test module
         shell: pwsh
         env:
@@ -648,7 +651,7 @@ jobs:
                   Write-Host "  $($_.FullName.Substring($outPath.Length + 1))"
               }
 
-              
+
   publish:
     name: Publish
     needs: [prepare, test]
