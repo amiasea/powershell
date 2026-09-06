@@ -562,6 +562,10 @@ jobs:
     needs: [prepare, manifest]
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      packages: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -582,6 +586,60 @@ jobs:
               -TrustRepository `
               -Scope CurrentUser
 
+      - name: Install required PowerShell modules
+        shell: pwsh
+        env:
+          MODULE: ${{ needs.prepare.outputs.module }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $modulePath = Join-Path $PWD "src/$env:MODULE"
+          $metadataPath = Join-Path $modulePath "$env:MODULE.json"
+
+          $metadata = Get-Content $metadataPath -Raw |
+              ConvertFrom-Json
+
+          foreach ($requiredModule in @($metadata.requiredModules)) {
+              if (-not $requiredModule.moduleName) {
+                  throw "Required PowerShell module is missing moduleName."
+              }
+
+              if (-not $requiredModule.moduleVersion) {
+                  throw "Required PowerShell module '$($requiredModule.moduleName)' is missing moduleVersion."
+              }
+
+              if (-not $requiredModule.repository) {
+                  throw "Required PowerShell module '$($requiredModule.moduleName)' is missing repository."
+              }
+
+              Write-Host "Installing $($requiredModule.moduleName) $($requiredModule.moduleVersion) from $($requiredModule.repository)..."
+
+              $installParameters = @{
+                  Name            = $requiredModule.moduleName
+                  Version         = $requiredModule.moduleVersion
+                  Repository      = $requiredModule.repository
+                  TrustRepository = $true
+                  Scope           = 'CurrentUser'
+              }
+
+              if ($requiredModule.repository -eq 'Amiasea') {
+                  if (-not $env:GITHUB_TOKEN) {
+                      throw "GITHUB_TOKEN is required to install PowerShell modules from the Amiasea repository."
+                  }
+
+                  $credential = [System.Management.Automation.PSCredential]::new(
+                      'USERNAME',
+                      (ConvertTo-SecureString `
+                          $env:GITHUB_TOKEN `
+                          -AsPlainText `
+                          -Force)
+                  )
+
+                  $installParameters['Credential'] = $credential
+              }
+
+              Install-PSResource @installParameters
+          }
+
       - name: Test module
         shell: pwsh
         env:
@@ -601,7 +659,7 @@ jobs:
               throw "Test directory not found: $testPath"
           }
 
-          Import-Module $manifestPath -Force -SkipModuleManifestValidation
+          Import-Module $manifestPath -Force
 
           Invoke-Pester `
               -Path $testPath `
