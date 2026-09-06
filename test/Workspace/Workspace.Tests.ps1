@@ -1,8 +1,8 @@
 using module ../../.build/Workspace/out/Workspace.Types.psm1
-using module ../../.build/Workspace/out/Workspace.psd1
+using module ../../.build/Workspace/out/Amiasea.Workspace.psd1
 
 BeforeAll {
-    $modulePath = Join-Path $PSScriptRoot '../../.build/Workspace/out/Workspace.psd1'
+    $modulePath = Join-Path $PSScriptRoot '../../.build/Workspace/out/Amiasea.Workspace.psd1'
 
     Import-Module $modulePath -Force
 }
