@@ -693,12 +693,7 @@ jobs:
           name: build-${{ needs.prepare.outputs.module }}
           path: .build/${{ needs.prepare.outputs.module }}
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '10.x'
-
-      - name: Create NuGet specification
+      - name: Package PowerShell resource
         shell: pwsh
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
@@ -706,56 +701,20 @@ jobs:
         run: |
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $outPath = Join-Path $buildPath "out"
-          $nuspecPath = Join-Path $buildPath "$env:MODULE.nuspec"
-
-          $nuspec = @"
-          <?xml version="1.0"?>
-          <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
-            <metadata>
-              <id>$env:PACKAGE_OWNER.$env:MODULE</id>
-              <version>$env:VERSION</version>
-              <authors>Amiasea</authors>
-              <owners>Amiasea</owners>
-              <description>Amiasea $env:MODULE PowerShell module.</description>
-              <projectUrl>https://github.com/amiasea/powershell</projectUrl>
-              <requireLicenseAcceptance>false</requireLicenseAcceptance>
-            </metadata>
-            <files>
-              <file src="out/**" target="" />
-            </files>
-          </package>
-          "@
-
-          Set-Content `
-              -Path $nuspecPath `
-              -Value $nuspec `
-              -Encoding utf8
-
-          Write-Host "Generated NuGet specification:"
-          Get-Content $nuspecPath -Raw | Write-Host
-
-      - name: Create NuGet package
-        shell: pwsh
-        env:
-          MODULE: ${{ needs.prepare.outputs.module }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $packageName = "$env:PACKAGE_OWNER.$env:MODULE"
-          $nuspecPath = Join-Path $buildPath "$env:MODULE.nuspec"
           $packagePath = Join-Path $buildPath "$packageName.$env:VERSION.nupkg"
 
-          dotnet pack `
-              $nuspecPath `
-              --version $env:VERSION `
-              --output $buildPath
+          Compress-PSResource `
+              -Path $outPath `
+              -DestinationPath $buildPath `
+              -PassThru
 
           if (-not (Test-Path $packagePath -PathType Leaf)) {
-              throw "NuGet package was not created: $packagePath"
+              throw "PowerShell resource package was not created: $packagePath"
           }
 
           Write-Host ""
-          Write-Host "NuGet package:"
+          Write-Host "PowerShell resource package:"
           Write-Host "  $packagePath"
 
       - name: Publish NuGet package
