@@ -656,6 +656,9 @@ jobs:
     name: Publish
     needs: [prepare, test]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout
@@ -680,40 +683,41 @@ jobs:
         run: |
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $outPath = Join-Path $buildPath "out"
-          $nuspecPath = Join-Path $buildPath "$env:MODULE.nuspec"
+          $projectPath = Join-Path $buildPath "$env:MODULE.pack.csproj"
           $packagePath = Join-Path $buildPath "$env:MODULE.$env:VERSION.nupkg"
 
-          $nuspec = @"
-          <?xml version="1.0"?>
-          <package>
-            <metadata>
-              <id>$env:MODULE</id>
-              <version>$env:VERSION</version>
-              <authors>Amiasea</authors>
-              <owners>Amiasea</owners>
-              <description>Amiasea $env:MODULE PowerShell module.</description>
-              <projectUrl>https://github.com/amiasea/powershell</projectUrl>
-            </metadata>
-            <files>
-              <file src="$outPath\**\*" target="." />
-            </files>
-          </package>
+          $project = @"
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <TargetFramework>net10.0</TargetFramework>
+              <PackageId>$env:MODULE</PackageId>
+              <Version>$env:VERSION</Version>
+              <Authors>Amiasea</Authors>
+              <PackageDescription>Amiasea $env:MODULE PowerShell module.</PackageDescription>
+              <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+              <IncludeBuildOutput>false</IncludeBuildOutput>
+              <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+              <PackageOutputPath>$buildPath</PackageOutputPath>
+            </PropertyGroup>
+
+            <ItemGroup>
+              <None Include="$outPath/**" Pack="true" PackagePath="%(RecursiveDir)%(Filename)%(Extension)" />
+            </ItemGroup>
+          </Project>
           "@
 
           Set-Content `
-              -Path $nuspecPath `
-              -Value $nuspec `
+              -Path $projectPath `
+              -Value $project `
               -Encoding utf8
 
-          dotnet tool install `
-              --global `
-              NuGet.CommandLine
+          Write-Host "Generated packaging project:"
+          Write-Host $project
 
-          $env:PATH = "$HOME/.dotnet/tools:$env:PATH"
-
-          nuget pack `
-              $nuspecPath `
-              -OutputDirectory $buildPath
+          dotnet pack `
+              $projectPath `
+              --configuration Release `
+              --no-restore
 
           if (-not (Test-Path $packagePath -PathType Leaf)) {
               throw "NuGet package was not created: $packagePath"
@@ -728,7 +732,7 @@ jobs:
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
           VERSION: ${{ needs.prepare.outputs.version }}
-          NUGET_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $packagePath = Join-Path $buildPath "$env:MODULE.$env:VERSION.nupkg"
@@ -736,5 +740,17 @@ jobs:
           dotnet nuget push `
               $packagePath `
               --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" `
-              --api-key $env:NUGET_TOKEN `
+              --api-key $env:NUGET_AUTH_TOKEN `
               --skip-duplicate
+
+      - name: Show package
+        shell: pwsh
+        env:
+          MODULE: ${{ needs.prepare.outputs.module }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $packagePath = Join-Path $buildPath "$env:MODULE.$env:VERSION.nupkg"
+
+          Write-Host "Published package:"
+          Write-Host "  $packagePath"
