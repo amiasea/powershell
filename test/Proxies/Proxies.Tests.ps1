@@ -1,4 +1,4 @@
-using module ../../.build/Workspace/out/Amiasea.Proxies.psd1
+using module ../../.build/Proxies/out/Amiasea.Proxies.psd1
 
 BeforeAll {
     $modulePath = Join-Path $PSScriptRoot '../../.build/Proxies/out/Amiasea.Proxies.psd1'
