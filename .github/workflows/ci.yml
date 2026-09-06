@@ -60,22 +60,41 @@ jobs:
               throw "Module metadata not found: $metadataPath"
           }
 
-          New-Item -ItemType Directory -Path $buildPath -Force | Out-Null
-          New-Item -ItemType Directory -Path $outPath -Force | Out-Null
-          New-Item -ItemType Directory -Path $packagesPath -Force | Out-Null
+          New-Item `
+              -ItemType Directory `
+              -Path $buildPath `
+              -Force |
+              Out-Null
 
-          Get-ChildItem -Path $modulePath -Force |
+          New-Item `
+              -ItemType Directory `
+              -Path $outPath `
+              -Force |
+              Out-Null
+
+          New-Item `
+              -ItemType Directory `
+              -Path $packagesPath `
+              -Force |
+              Out-Null
+
+          Get-ChildItem `
+              -Path $modulePath `
+              -Force |
               Where-Object {
                   $_.Name -ne "$env:MODULE.json" -and
                   $_.Name -ne "$env:MODULE.psd1"
               } |
-              Copy-Item -Destination $outPath -Recurse -Force
+              Copy-Item `
+                  -Destination $outPath `
+                  -Recurse `
+                  -Force
 
           Write-Host "Build output: $outPath"
           Write-Host "NuGet packages: $packagesPath"
 
       - name: Upload build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-${{ steps.tag.outputs.module }}
           path: .build/${{ steps.tag.outputs.module }}
@@ -92,7 +111,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Download build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
           path: .build/${{ needs.prepare.outputs.module }}
@@ -163,7 +182,7 @@ jobs:
               --packages $packagesPath
 
       - name: Upload build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
           path: .build/${{ needs.prepare.outputs.module }}
@@ -181,7 +200,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Download build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
           path: .build/${{ needs.prepare.outputs.module }}
@@ -269,6 +288,7 @@ jobs:
 
               foreach ($target in $targets) {
                   $targetName = $target.Name
+
                   $targetLibrary = $target.Value.PSObject.Properties |
                       Where-Object {
                           $_.Name -eq $library.Name
@@ -386,7 +406,7 @@ jobs:
           }
 
       - name: Upload build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
           path: .build/${{ needs.prepare.outputs.module }}
@@ -404,7 +424,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Download build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
           path: .build/${{ needs.prepare.outputs.module }}
@@ -431,7 +451,8 @@ jobs:
               throw "Module file not found: $rootModulePath"
           }
 
-          $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
+          $metadata = Get-Content $metadataPath -Raw |
+              ConvertFrom-Json
 
           if (-not $metadata.guid) {
               throw "Module metadata does not contain a guid: $metadataPath"
@@ -547,7 +568,7 @@ jobs:
           Write-Host ""
 
       - name: Upload build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
           path: .build/${{ needs.prepare.outputs.module }}
@@ -565,7 +586,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Download build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
           path: .build/${{ needs.prepare.outputs.module }}
@@ -665,7 +686,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Download build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
           path: .build/${{ needs.prepare.outputs.module }}
@@ -675,7 +696,7 @@ jobs:
         with:
           dotnet-version: '10.x'
 
-      - name: Create NuGet package
+      - name: Create NuGet specification
         shell: pwsh
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
@@ -683,41 +704,48 @@ jobs:
         run: |
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $outPath = Join-Path $buildPath "out"
-          $projectPath = Join-Path $buildPath "$env:MODULE.pack.csproj"
-          $packagePath = Join-Path $buildPath "$env:MODULE.$env:VERSION.nupkg"
+          $nuspecPath = Join-Path $buildPath "$env:MODULE.nuspec"
 
-          $project = @"
-          <Project Sdk="Microsoft.NET.Sdk">
-            <PropertyGroup>
-              <TargetFramework>net10.0</TargetFramework>
-              <PackageId>$env:MODULE</PackageId>
-              <Version>$env:VERSION</Version>
-              <Authors>Amiasea</Authors>
-              <PackageDescription>Amiasea $env:MODULE PowerShell module.</PackageDescription>
-              <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-              <IncludeBuildOutput>false</IncludeBuildOutput>
-              <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
-              <PackageOutputPath>$buildPath</PackageOutputPath>
-            </PropertyGroup>
-
-            <ItemGroup>
-              <None Include="$outPath/**" Pack="true" PackagePath="%(RecursiveDir)%(Filename)%(Extension)" />
-            </ItemGroup>
-          </Project>
+          $nuspec = @"
+          <?xml version="1.0"?>
+          <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+            <metadata>
+              <id>$env:MODULE</id>
+              <version>$env:VERSION</version>
+              <authors>Amiasea</authors>
+              <owners>Amiasea</owners>
+              <description>Amiasea $env:MODULE PowerShell module.</description>
+              <projectUrl>https://github.com/amiasea/powershell</projectUrl>
+              <requireLicenseAcceptance>false</requireLicenseAcceptance>
+            </metadata>
+            <files>
+              <file src="out/**" target="" />
+            </files>
+          </package>
           "@
 
           Set-Content `
-              -Path $projectPath `
-              -Value $project `
+              -Path $nuspecPath `
+              -Value $nuspec `
               -Encoding utf8
 
-          Write-Host "Generated packaging project:"
-          Write-Host $project
+          Write-Host "Generated NuGet specification:"
+          Get-Content $nuspecPath -Raw | Write-Host
+
+      - name: Create NuGet package
+        shell: pwsh
+        env:
+          MODULE: ${{ needs.prepare.outputs.module }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $nuspecPath = Join-Path $buildPath "$env:MODULE.nuspec"
+          $packagePath = Join-Path $buildPath "$env:MODULE.$env:VERSION.nupkg"
 
           dotnet pack `
-              $projectPath `
-              --configuration Release `
-              --no-restore
+              $nuspecPath `
+              --version $env:VERSION `
+              --output $buildPath
 
           if (-not (Test-Path $packagePath -PathType Leaf)) {
               throw "NuGet package was not created: $packagePath"
