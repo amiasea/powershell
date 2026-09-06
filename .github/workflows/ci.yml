@@ -701,6 +701,7 @@ jobs:
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
           VERSION: ${{ needs.prepare.outputs.version }}
+          PACKAGE_OWNER: ${{ github.repository_owner }}
         run: |
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $outPath = Join-Path $buildPath "out"
@@ -710,7 +711,7 @@ jobs:
           <?xml version="1.0"?>
           <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
             <metadata>
-              <id>$env:MODULE</id>
+              <id>$env:PACKAGE_OWNER.$env:MODULE</id>
               <version>$env:VERSION</version>
               <authors>Amiasea</authors>
               <owners>Amiasea</owners>
@@ -737,10 +738,12 @@ jobs:
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
           VERSION: ${{ needs.prepare.outputs.version }}
+          PACKAGE_OWNER: ${{ github.repository_owner }}
         run: |
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $packageName = "$env:PACKAGE_OWNER.$env:MODULE"
           $nuspecPath = Join-Path $buildPath "$env:MODULE.nuspec"
-          $packagePath = Join-Path $buildPath "$env:MODULE.$env:VERSION.nupkg"
+          $packagePath = Join-Path $buildPath "$packageName.$env:VERSION.nupkg"
 
           dotnet pack `
               $nuspecPath `
@@ -760,10 +763,12 @@ jobs:
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
           VERSION: ${{ needs.prepare.outputs.version }}
+          PACKAGE_OWNER: ${{ github.repository_owner }}
           NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
-          $packagePath = Join-Path $buildPath "$env:MODULE.$env:VERSION.nupkg"
+          $packageName = "$env:PACKAGE_OWNER.$env:MODULE"
+          $packagePath = Join-Path $buildPath "$packageName.$env:VERSION.nupkg"
 
           dotnet nuget push `
               $packagePath `
@@ -776,9 +781,11 @@ jobs:
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
           VERSION: ${{ needs.prepare.outputs.version }}
+          PACKAGE_OWNER: ${{ github.repository_owner }}
         run: |
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
-          $packagePath = Join-Path $buildPath "$env:MODULE.$env:VERSION.nupkg"
+          $packageName = "$env:PACKAGE_OWNER.$env:MODULE"
+          $packagePath = Join-Path $buildPath "$packageName.$env:VERSION.nupkg"
 
           Write-Host "Published package:"
           Write-Host "  $packagePath"

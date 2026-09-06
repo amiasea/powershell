@@ -1,5 +1,6 @@
 {
   "guid": "685b7ca3-a866-4b68-b522-6fa02c6e0155",
+  "packageName": "Amiasea.Workspace",
   "requiredModules": [
     {
       "moduleName": "PowerShellForGitHub",
