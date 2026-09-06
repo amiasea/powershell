@@ -210,7 +210,7 @@ Describe 'Proxies' {
             }
 
             Mock Resolve-AmiaseaRequiredResource -ModuleName Amiasea.Proxies {
-                @{}
+                return ,@{}
             }
 
             {
@@ -242,7 +242,7 @@ Describe 'Proxies' {
             }
 
             Mock Resolve-AmiaseaRequiredResource -ModuleName Amiasea.Proxies {
-                @{}
+                return ,@{}
             }
 
             {
@@ -274,7 +274,7 @@ Describe 'Proxies' {
             }
 
             Mock Resolve-AmiaseaRequiredResource -ModuleName Amiasea.Proxies {
-                @{}
+                return ,@{}
             }
 
             {
@@ -304,7 +304,7 @@ Describe 'Proxies' {
             }
 
             Mock Resolve-AmiaseaRequiredResource -ModuleName Amiasea.Proxies {
-                @{}
+                return ,@{}
             }
 
             {
