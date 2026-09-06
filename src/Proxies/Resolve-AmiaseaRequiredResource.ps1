@@ -43,5 +43,5 @@ function Resolve-AmiaseaRequiredResource {
         $requiredResource[[string]$dependency.Name] = $dependencySpec
     }
 
-    return $requiredResource
+    return ,$requiredResource
 }
