@@ -468,6 +468,11 @@ jobs:
           Write-Host ""
           Write-Host "Generated: $manifestPath"
 
+          Write-Host ""
+          Write-Host "Generated module manifest:"
+          Get-Content $manifestPath -Raw | Write-Host
+          Write-Host ""
+
       - name: Install Pester
         shell: pwsh
         run: |
