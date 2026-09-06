@@ -11,103 +11,110 @@ Describe 'Proxies' {
     Context 'Resolve-AmiaseaRequiredResource' {
 
         It 'resolves an Amiasea resource from the Amiasea repository' {
-            Mock Find-PSResource -ModuleName Amiasea.Proxies {
-                [pscustomobject]@{
-                    Name         = 'Amiasea.Workspace'
-                    Version      = '1.2.3'
-                    Dependencies = @()
+            InModuleScope Amiasea.Proxies {
+                Mock Find-PSResource {
+                    [pscustomobject]@{
+                        Name         = 'Amiasea.Workspace'
+                        Version      = '1.2.3'
+                        Dependencies = @()
+                    }
                 }
+
+                $result = Resolve-AmiaseaRequiredResource `
+                    -Name 'Amiasea.Workspace' `
+                    -Version '1.2.3'
+
+                Should -Invoke Find-PSResource `
+                    -Times 1 `
+                    -Exactly `
+                    -ParameterFilter {
+                        $Name -eq 'Amiasea.Workspace' -and
+                        $Version -eq '1.2.3' -and
+                        $Repository -eq 'Amiasea'
+                    }
+
+                $result | Should -Not -BeNullOrEmpty
             }
-
-            $result = Resolve-AmiaseaRequiredResource `
-                -Name 'Amiasea.Workspace' `
-                -Version '1.2.3'
-
-            Should -Invoke Find-PSResource `
-                -ModuleName Amiasea.Proxies `
-                -Times 1 `
-                -Exactly `
-                -ParameterFilter {
-                    $Name -eq 'Amiasea.Workspace' -and
-                    $Version -eq '1.2.3' -and
-                    $Repository -eq 'Amiasea'
-                }
-
-            $result | Should -Not -BeNullOrEmpty
         }
 
         It 'returns dependency metadata as RequiredResource entries' {
-            Mock Find-PSResource -ModuleName Amiasea.Proxies {
-                [pscustomobject]@{
-                    Name         = 'Amiasea.Workspace'
-                    Version      = '1.2.3'
-                    Dependencies = @(
-                        [pscustomobject]@{
-                            Name       = 'PowerShellForGitHub'
-                            Version    = '0.17.0'
-                            Repository = 'PSGallery'
-                        },
-                        [pscustomobject]@{
-                            Name       = 'Amiasea.Shared'
-                            Version    = '2.0.0'
-                            Repository = 'Amiasea'
-                        }
-                    )
+            InModuleScope Amiasea.Proxies {
+                Mock Find-PSResource {
+                    [pscustomobject]@{
+                        Name         = 'Amiasea.Workspace'
+                        Version      = '1.2.3'
+                        Dependencies = @(
+                            [pscustomobject]@{
+                                Name       = 'PowerShellForGitHub'
+                                Version    = '0.17.0'
+                                Repository = 'PSGallery'
+                            },
+                            [pscustomobject]@{
+                                Name       = 'Amiasea.Shared'
+                                Version    = '2.0.0'
+                                Repository = 'Amiasea'
+                            }
+                        )
+                    }
                 }
+
+                $result = Resolve-AmiaseaRequiredResource `
+                    -Name 'Amiasea.Workspace' `
+                    -Version '1.2.3'
+
+                $result.Keys | Should -Contain 'PowerShellForGitHub'
+                $result.Keys | Should -Contain 'Amiasea.Shared'
+
+                $result['PowerShellForGitHub'].version |
+                    Should -Be '0.17.0'
+
+                $result['PowerShellForGitHub'].repository |
+                    Should -Be 'PSGallery'
+
+                $result['Amiasea.Shared'].version |
+                    Should -Be '2.0.0'
+
+                $result['Amiasea.Shared'].repository |
+                    Should -Be 'Amiasea'
             }
-
-            $result = Resolve-AmiaseaRequiredResource `
-                -Name 'Amiasea.Workspace' `
-                -Version '1.2.3'
-
-            $result.Keys | Should -Contain 'PowerShellForGitHub'
-            $result.Keys | Should -Contain 'Amiasea.Shared'
-
-            $result['PowerShellForGitHub'].version |
-                Should -Be '0.17.0'
-
-            $result['PowerShellForGitHub'].repository |
-                Should -Be 'PSGallery'
-
-            $result['Amiasea.Shared'].version |
-                Should -Be '2.0.0'
-
-            $result['Amiasea.Shared'].repository |
-                Should -Be 'Amiasea'
         }
 
         It 'omits dependencies without a name' {
-            Mock Find-PSResource -ModuleName Amiasea.Proxies {
-                [pscustomobject]@{
-                    Name         = 'Amiasea.Workspace'
-                    Version      = '1.2.3'
-                    Dependencies = @(
-                        [pscustomobject]@{
-                            Name       = $null
-                            Version    = '1.0.0'
-                            Repository = 'PSGallery'
-                        }
-                    )
+            InModuleScope Amiasea.Proxies {
+                Mock Find-PSResource {
+                    [pscustomobject]@{
+                        Name         = 'Amiasea.Workspace'
+                        Version      = '1.2.3'
+                        Dependencies = @(
+                            [pscustomobject]@{
+                                Name       = $null
+                                Version    = '1.0.0'
+                                Repository = 'PSGallery'
+                            }
+                        )
+                    }
                 }
+
+                $result = Resolve-AmiaseaRequiredResource `
+                    -Name 'Amiasea.Workspace' `
+                    -Version '1.2.3'
+
+                $result.Count | Should -Be 0
             }
-
-            $result = Resolve-AmiaseaRequiredResource `
-                -Name 'Amiasea.Workspace' `
-                -Version '1.2.3'
-
-            $result.Count | Should -Be 0
         }
 
         It 'throws when the Amiasea resource cannot be found' {
-            Mock Find-PSResource -ModuleName Amiasea.Proxies {
-                $null
-            }
+            InModuleScope Amiasea.Proxies {
+                Mock Find-PSResource {
+                    $null
+                }
 
-            {
-                Resolve-AmiaseaRequiredResource `
-                    -Name 'Amiasea.Missing' `
-                    -Version '1.2.3'
-            } | Should -Throw "Amiasea resource 'Amiasea.Missing' could not be found."
+                {
+                    Resolve-AmiaseaRequiredResource `
+                        -Name 'Amiasea.Missing' `
+                        -Version '1.2.3'
+                } | Should -Throw "Amiasea resource 'Amiasea.Missing' could not be found."
+            }
         }
     }
 
