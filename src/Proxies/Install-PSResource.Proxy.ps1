@@ -101,17 +101,55 @@ process {
 }
 '@
 
-$processPattern = '(?s)process\s*\{.*?\n\}'
+#
+# Parse the generated proxy so the process block can be located
+# structurally rather than by matching braces with a regular expression.
+#
+$tokens = $null
+$errors = $null
 
-if ($proxy -notmatch $processPattern) {
+$ast = [System.Management.Automation.Language.Parser]::ParseInput(
+    $proxy,
+    [ref]$tokens,
+    [ref]$errors
+)
+
+if ($errors.Count -gt 0) {
+    throw "Generated Install-PSResource proxy failed to parse before modification: $($errors[0].Message)"
+}
+
+$processBlock = $ast.ProcessBlock
+
+if ($null -eq $processBlock) {
     throw "Unable to locate generated Install-PSResource process block."
 }
 
-$proxy = [regex]::Replace(
+#
+# Replace exactly the extent of the top-level process block.
+# The AST extent accounts for nested PowerShell script blocks correctly.
+#
+$start = $processBlock.Extent.StartOffset
+$end   = $processBlock.Extent.EndOffset
+
+$proxy =
+    $proxy.Substring(0, $start) +
+    $injectedProcess.Trim() +
+    $proxy.Substring($end)
+
+#
+# Validate the modified proxy before creating the scriptblock.
+#
+$tokens = $null
+$errors = $null
+
+[void][System.Management.Automation.Language.Parser]::ParseInput(
     $proxy,
-    $processPattern,
-    $injectedProcess,
-    1
+    [ref]$tokens,
+    [ref]$errors
 )
+
+if ($errors.Count -gt 0) {
+    throw "Modified Install-PSResource proxy failed to parse: $($errors[0].Message)"
+}
 
 . ([scriptblock]::Create($proxy))
