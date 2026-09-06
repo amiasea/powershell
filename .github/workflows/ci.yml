@@ -439,7 +439,10 @@ jobs:
           $metadataPath = Join-Path $modulePath "$env:MODULE.json"
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $outPath = Join-Path $buildPath "out"
-          $manifestPath = Join-Path $outPath "$env:MODULE.psd1"
+
+          $packageName = "Amiasea.$env:MODULE"
+          $manifestPath = Join-Path $outPath "$packageName.psd1"
+
           $rootModule = "$env:MODULE.psm1"
           $rootModulePath = Join-Path $outPath $rootModule
 
