@@ -7,19 +7,20 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
-  build-test:
+  prepare:
+    name: Prepare
     runs-on: ubuntu-latest
+
+    outputs:
+      module: ${{ steps.tag.outputs.module }}
+      version: ${{ steps.tag.outputs.version }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.x'
+        uses: actions/checkout@v7
 
       - name: Parse tag
         id: tag
@@ -73,10 +74,38 @@ jobs:
           Write-Host "Build output: $outPath"
           Write-Host "NuGet packages: $packagesPath"
 
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ steps.tag.outputs.module }}
+          path: .build/${{ steps.tag.outputs.module }}
+          if-no-files-found: error
+
+
+  restore:
+    name: Restore
+    needs: prepare
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.module }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x'
+
       - name: Install required PowerShell modules
         shell: pwsh
         env:
-          MODULE: ${{ steps.tag.outputs.module }}
+          MODULE: ${{ needs.prepare.outputs.module }}
         run: |
           $modulePath = Join-Path $PWD "src/$env:MODULE"
           $metadataPath = Join-Path $modulePath "$env:MODULE.json"
@@ -105,7 +134,7 @@ jobs:
       - name: Restore NuGet package references
         shell: pwsh
         env:
-          MODULE: ${{ steps.tag.outputs.module }}
+          MODULE: ${{ needs.prepare.outputs.module }}
         run: |
           $modulePath = Join-Path $PWD "src/$env:MODULE"
           $metadataPath = Join-Path $modulePath "$env:MODULE.json"
@@ -138,7 +167,7 @@ jobs:
           $project = @"
           <Project Sdk="Microsoft.NET.Sdk">
             <PropertyGroup>
-              <TargetFramework>net8.0</TargetFramework>
+              <TargetFramework>net10.0</TargetFramework>
               <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
             </PropertyGroup>
 
@@ -160,10 +189,34 @@ jobs:
               $projectPath `
               --packages $packagesPath
 
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.module }}
+          if-no-files-found: error
+          overwrite: true
+
+
+  materialize:
+    name: Materialize
+    needs: [prepare, restore]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.module }}
+
       - name: Materialize NuGet assets
         shell: pwsh
         env:
-          MODULE: ${{ steps.tag.outputs.module }}
+          MODULE: ${{ needs.prepare.outputs.module }}
         run: |
           $modulePath = Join-Path $PWD "src/$env:MODULE"
           $metadataPath = Join-Path $modulePath "$env:MODULE.json"
@@ -336,11 +389,35 @@ jobs:
                   }
           }
 
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.module }}
+          if-no-files-found: error
+          overwrite: true
+
+
+  manifest:
+    name: Manifest
+    needs: [prepare, materialize]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.module }}
+
       - name: Build module manifest
         shell: pwsh
         env:
-          MODULE: ${{ steps.tag.outputs.module }}
-          VERSION: ${{ steps.tag.outputs.version }}
+          MODULE: ${{ needs.prepare.outputs.module }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           $modulePath = Join-Path $PWD "src/$env:MODULE"
           $metadataPath = Join-Path $modulePath "$env:MODULE.json"
@@ -473,6 +550,30 @@ jobs:
           Get-Content $manifestPath -Raw | Write-Host
           Write-Host ""
 
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.module }}
+          if-no-files-found: error
+          overwrite: true
+
+
+  test:
+    name: Test
+    needs: [prepare, manifest]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.module }}
+
       - name: Install Pester
         shell: pwsh
         run: |
@@ -486,7 +587,7 @@ jobs:
       - name: Test module
         shell: pwsh
         env:
-          MODULE: ${{ steps.tag.outputs.module }}
+          MODULE: ${{ needs.prepare.outputs.module }}
         run: |
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $outPath = Join-Path $buildPath "out"
@@ -510,7 +611,7 @@ jobs:
       - name: Show build artifact
         shell: pwsh
         env:
-          MODULE: ${{ steps.tag.outputs.module }}
+          MODULE: ${{ needs.prepare.outputs.module }}
         run: |
           $outPath = Join-Path $PWD ".build/$env:MODULE/out"
 
@@ -523,3 +624,90 @@ jobs:
               ForEach-Object {
                   Write-Host "  $($_.FullName.Substring($outPath.Length + 1))"
               }
+
+  publish:
+    name: Publish
+    needs: [prepare, test]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.module }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x'
+
+      - name: Create NuGet package
+        shell: pwsh
+        env:
+          MODULE: ${{ needs.prepare.outputs.module }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $outPath = Join-Path $buildPath "out"
+          $nuspecPath = Join-Path $buildPath "$env:MODULE.nuspec"
+          $packagePath = Join-Path $buildPath "$env:MODULE.$env:VERSION.nupkg"
+
+          $nuspec = @"
+          <?xml version="1.0"?>
+          <package>
+            <metadata>
+              <id>$env:MODULE</id>
+              <version>$env:VERSION</version>
+              <authors>Amiasea</authors>
+              <owners>Amiasea</owners>
+              <description>Amiasea $env:MODULE PowerShell module.</description>
+              <projectUrl>https://github.com/amiasea/powershell</projectUrl>
+            </metadata>
+            <files>
+              <file src="$outPath\**\*" target="." />
+            </files>
+          </package>
+          "@
+
+          Set-Content `
+              -Path $nuspecPath `
+              -Value $nuspec `
+              -Encoding utf8
+
+          dotnet tool install `
+              --global `
+              NuGet.CommandLine
+
+          $env:PATH = "$HOME/.dotnet/tools:$env:PATH"
+
+          nuget pack `
+              $nuspecPath `
+              -OutputDirectory $buildPath
+
+          if (-not (Test-Path $packagePath -PathType Leaf)) {
+              throw "NuGet package was not created: $packagePath"
+          }
+
+          Write-Host ""
+          Write-Host "NuGet package:"
+          Write-Host "  $packagePath"
+
+      - name: Publish NuGet package
+        shell: pwsh
+        env:
+          MODULE: ${{ needs.prepare.outputs.module }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          NUGET_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $packagePath = Join-Path $buildPath "$env:MODULE.$env:VERSION.nupkg"
+
+          dotnet nuget push `
+              $packagePath `
+              --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" `
+              --api-key $env:NUGET_TOKEN `
+              --skip-duplicate
