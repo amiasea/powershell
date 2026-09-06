@@ -611,31 +611,46 @@ jobs:
                   throw "Required PowerShell module '$($requiredModule.moduleName)' is missing repository."
               }
 
-              Write-Host "Installing $($requiredModule.moduleName) $($requiredModule.moduleVersion) from $($requiredModule.repository)..."
+              $repository = [string]$requiredModule.repository
 
-              $installParameters = @{
-                  Name            = $requiredModule.moduleName
-                  Version         = $requiredModule.moduleVersion
-                  Repository      = $requiredModule.repository
-                  TrustRepository = $true
-                  Scope           = 'CurrentUser'
-              }
-
-              if ($requiredModule.repository -eq 'Amiasea') {
-                  if (-not $env:GITHUB_TOKEN) {
-                      throw "GITHUB_TOKEN is required to install PowerShell modules from the Amiasea repository."
+              switch ($repository) {
+                  'PSGallery' {
+                      $installParameters = @{
+                          Name            = $requiredModule.moduleName
+                          Version         = $requiredModule.moduleVersion
+                          Repository      = $repository
+                          TrustRepository = $true
+                          Scope           = 'CurrentUser'
+                      }
                   }
 
-                  $credential = [System.Management.Automation.PSCredential]::new(
-                      'USERNAME',
-                      (ConvertTo-SecureString `
-                          $env:GITHUB_TOKEN `
-                          -AsPlainText `
-                          -Force)
-                  )
+                  'Amiasea' {
+                      if (-not $env:GITHUB_TOKEN) {
+                          throw "GITHUB_TOKEN is required to install PowerShell module '$($requiredModule.moduleName)' from the Amiasea repository."
+                      }
 
-                  $installParameters['Credential'] = $credential
+                      $installParameters = @{
+                          Name            = $requiredModule.moduleName
+                          Version         = $requiredModule.moduleVersion
+                          Repository      = $repository
+                          TrustRepository = $true
+                          Scope           = 'CurrentUser'
+                          Credential      = [System.Management.Automation.PSCredential]::new(
+                              'USERNAME',
+                              (ConvertTo-SecureString `
+                                  $env:GITHUB_TOKEN `
+                                  -AsPlainText `
+                                  -Force)
+                          )
+                      }
+                  }
+
+                  default {
+                      throw "Unsupported PowerShell module repository '$repository' for required module '$($requiredModule.moduleName)'. CI authentication for this repository must be implemented before the dependency can be used."
+                  }
               }
+
+              Write-Host "Installing $($requiredModule.moduleName) $($requiredModule.moduleVersion) from $repository..."
 
               Install-PSResource @installParameters
           }
