@@ -227,7 +227,9 @@ jobs:
           $libPath = Join-Path $outPath "lib"
           $runtimePath = Join-Path $outPath "runtimes"
 
-          $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
+          $metadata = Get-Content $metadataPath -Raw |
+              ConvertFrom-Json
+
           $packageReferences = @($metadata.packageReferences)
 
           if ($packageReferences.Count -eq 0) {
@@ -239,20 +241,34 @@ jobs:
               throw "NuGet assets file not found: $assetsPath"
           }
 
-          $assets = Get-Content $assetsPath -Raw | ConvertFrom-Json
+          $assets = Get-Content $assetsPath -Raw |
+              ConvertFrom-Json
 
-          $target = $assets.targets.'net10'
+          $targets = @(
+              $assets.targets.PSObject.Properties
+          )
 
-          if (-not $target) {
-              throw "NuGet restore did not produce a net10 target."
+          if ($targets.Count -eq 0) {
+              throw "NuGet restore did not produce any target frameworks."
           }
 
-          New-Item -ItemType Directory -Path $libPath -Force | Out-Null
-          New-Item -ItemType Directory -Path $runtimePath -Force | Out-Null
+          New-Item `
+              -ItemType Directory `
+              -Path $libPath `
+              -Force |
+              Out-Null
+
+          New-Item `
+              -ItemType Directory `
+              -Path $runtimePath `
+              -Force |
+              Out-Null
 
           $packageLibraries = @(
               $assets.libraries.PSObject.Properties |
-                  Where-Object { $_.Value.type -eq 'package' }
+                  Where-Object {
+                      $_.Value.type -eq 'package'
+                  }
           )
 
           foreach ($library in $packageLibraries) {
@@ -278,87 +294,95 @@ jobs:
               Write-Host ""
               Write-Host "Materializing package: $packageName $packageVersion"
 
-              $targetLibrary = $target.PSObject.Properties |
-                  Where-Object { $_.Name -eq $library.Name } |
-                  Select-Object -ExpandProperty Value -First 1
+              foreach ($target in $targets) {
+                  $targetName = $target.Name
+                  $targetLibrary = $target.Value.PSObject.Properties |
+                      Where-Object {
+                          $_.Name -eq $library.Name
+                      } |
+                      Select-Object -ExpandProperty Value -First 1
 
-              if (-not $targetLibrary) {
-                  Write-Host "  Package is not part of the net10 target assets."
-                  continue
-              }
+                  if (-not $targetLibrary) {
+                      continue
+                  }
 
-              $tfmOrder = @(
-                  'net10.0',
-                  'net8.0',
-                  'netstandard2.1',
-                  'netstandard2.0',
-                  'net472'
-              )
+                  Write-Host "  Target: $targetName"
 
-              $packageLibRoot = Join-Path $packageRoot "lib"
-              $selectedLib = $null
+                  $assetPaths = @()
 
-              if (Test-Path $packageLibRoot -PathType Container) {
-                  $libDirectories = @(
-                      Get-ChildItem `
-                          -Path $packageLibRoot `
-                          -Directory
+                  if ($targetLibrary.compile) {
+                      $assetPaths += @(
+                          $targetLibrary.compile.PSObject.Properties.Name
+                      )
+                  }
+
+                  if ($targetLibrary.runtime) {
+                      $assetPaths += @(
+                          $targetLibrary.runtime.PSObject.Properties.Name
+                      )
+                  }
+
+                  $assetPaths = @(
+                      $assetPaths |
+                          Select-Object -Unique
                   )
 
-                  foreach ($tfm in $tfmOrder) {
-                      $candidate = $libDirectories |
-                          Where-Object { $_.Name -eq $tfm } |
-                          Select-Object -First 1
+                  foreach ($assetPath in $assetPaths) {
+                      $sourcePath = Join-Path `
+                          $packageRoot `
+                          $assetPath
 
-                      if ($candidate) {
-                          $selectedLib = $candidate
-                          break
+                      if (-not (Test-Path $sourcePath -PathType Leaf)) {
+                          throw "NuGet asset not found: $sourcePath"
                       }
-                  }
-              }
 
-              if ($selectedLib) {
-                  $destinationLib = Join-Path $libPath $selectedLib.Name
+                      if ($assetPath -like 'lib/*') {
+                          $relativePath = $assetPath.Substring(4)
+                          $destinationPath = Join-Path `
+                              $libPath `
+                              $relativePath
 
-                  New-Item `
-                      -ItemType Directory `
-                      -Path $destinationLib `
-                      -Force | Out-Null
-
-                  Get-ChildItem `
-                      -Path $selectedLib.FullName `
-                      -File |
-                      Copy-Item `
-                          -Destination $destinationLib `
-                          -Force
-
-                  Write-Host "  Managed assets: lib/$($selectedLib.Name)"
-              }
-
-              $packageRuntimeRoot = Join-Path $packageRoot "runtimes"
-
-              if (Test-Path $packageRuntimeRoot -PathType Container) {
-                  Get-ChildItem `
-                      -Path $packageRuntimeRoot `
-                      -Directory |
-                      ForEach-Object {
-                          $destinationRuntime = Join-Path `
-                              $runtimePath `
-                              $_.Name
+                          $destinationDirectory = Split-Path `
+                              $destinationPath `
+                              -Parent
 
                           New-Item `
                               -ItemType Directory `
-                              -Path $destinationRuntime `
-                              -Force | Out-Null
+                              -Path $destinationDirectory `
+                              -Force |
+                              Out-Null
 
                           Copy-Item `
-                              -Path (Join-Path $_.FullName '*') `
-                              -Destination $destinationRuntime `
-                              -Recurse `
+                              -LiteralPath $sourcePath `
+                              -Destination $destinationPath `
                               -Force
-                      }
 
-                  Write-Host "  Runtime assets: runtimes/"
+                          Write-Host "    Managed: $assetPath"
+                      }
+                      elseif ($assetPath -like 'runtimes/*') {
+                          $relativePath = $assetPath.Substring(9)
+                          $destinationPath = Join-Path `
+                              $runtimePath `
+                              $relativePath
+
+                          $destinationDirectory = Split-Path `
+                              $destinationPath `
+                              -Parent
+
+                          New-Item `
+                              -ItemType Directory `
+                              -Path $destinationDirectory `
+                              -Force |
+                              Out-Null
+
+                          Copy-Item `
+                              -LiteralPath $sourcePath `
+                              -Destination $destinationPath `
+                              -Force
+
+                          Write-Host "    Runtime: $assetPath"
+                      }
+                  }
               }
           }
 
@@ -624,6 +648,7 @@ jobs:
                   Write-Host "  $($_.FullName.Substring($outPath.Length + 1))"
               }
 
+              
   publish:
     name: Publish
     needs: [prepare, test]
