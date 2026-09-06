@@ -462,12 +462,10 @@ jobs:
 
           $requiredModules = @(
               foreach ($requiredModule in @($metadata.requiredModules)) {
-                  @(
-                      @{
-                          ModuleName    = $requiredModule.moduleName
-                          ModuleVersion = $requiredModule.moduleVersion
-                      }
-                  )
+                  @{
+                      ModuleName    = $requiredModule.moduleName
+                      ModuleVersion = $requiredModule.moduleVersion
+                  }
               }
           )
 
