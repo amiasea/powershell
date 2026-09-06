@@ -4,7 +4,8 @@
   "requiredModules": [
     {
       "moduleName": "PowerShellForGitHub",
-      "moduleVersion": "0.17.0"
+      "moduleVersion": "0.17.0",
+      "repository": "PSGallery"
     }
   ],
   "packageReferences": [
