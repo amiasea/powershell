@@ -1,10 +1,12 @@
+using module ../../.build/Workspace/out/Amiasea.Proxies.psd1
+
 BeforeAll {
-    $modulePath = Join-Path $PSScriptRoot '..\..\src\Proxies\Proxies.psm1'
+    $modulePath = Join-Path $PSScriptRoot '../../.build/Proxies/out/Amiasea.Proxies.psd1'
 
     Import-Module $modulePath -Force
 }
 
-Describe 'Amiasea.Proxies' {
+Describe 'Proxies' {
 
     Context 'Resolve-AmiaseaRequiredResource' {
 
