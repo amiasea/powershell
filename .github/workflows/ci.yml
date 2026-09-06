@@ -548,6 +548,34 @@ jobs:
           Get-Content $manifestPath -Raw | Write-Host
           Write-Host ""
 
+      - name: Print generated Proxies package
+        shell: pwsh
+        run: |
+          $out = Join-Path $PWD '.build/Proxies/out'
+
+          Write-Host "===== Generated Proxies package ====="
+          Get-ChildItem -Path $out -Force | Format-Table Name, Length
+
+          $psm1 = Join-Path $out 'Proxies.psm1'
+          $psd1 = Join-Path $out 'Amiasea.Proxies.psd1'
+
+          Write-Host ""
+          Write-Host "===== Proxies.psm1 ====="
+          if (-not (Test-Path $psm1 -PathType Leaf)) {
+              throw "Generated Proxies.psm1 not found: $psm1"
+          }
+          Get-Content -Path $psm1 -Raw
+
+          Write-Host ""
+          Write-Host "===== Amiasea.Proxies.psd1 ====="
+          if (-not (Test-Path $psd1 -PathType Leaf)) {
+              throw "Generated Amiasea.Proxies.psd1 not found: $psd1"
+          }
+          Get-Content -Path $psd1 -Raw
+
+          Write-Host ""
+          Write-Host "===== End generated Proxies package ====="
+
       - name: Upload build
         uses: actions/upload-artifact@v7
         with:
