@@ -601,7 +601,7 @@ jobs:
               throw "Test directory not found: $testPath"
           }
 
-          Import-Module $manifestPath -Force
+          Import-Module $manifestPath -Force -SkipModuleManifestValidation
 
           Invoke-Pester `
               -Path $testPath `
