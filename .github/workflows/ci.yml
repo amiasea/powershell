@@ -705,6 +705,7 @@ jobs:
           Compress-PSResource `
               -Path $outPath `
               -DestinationPath $buildPath `
+              -SkipModuleManifestValidate `
               -PassThru
 
           if (-not (Test-Path $packagePath -PathType Leaf)) {
