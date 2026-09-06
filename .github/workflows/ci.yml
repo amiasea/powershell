@@ -241,10 +241,10 @@ jobs:
 
           $assets = Get-Content $assetsPath -Raw | ConvertFrom-Json
 
-          $target = $assets.targets.'net8.0'
+          $target = $assets.targets.'net10'
 
           if (-not $target) {
-              throw "NuGet restore did not produce a net8.0 target."
+              throw "NuGet restore did not produce a net10 target."
           }
 
           New-Item -ItemType Directory -Path $libPath -Force | Out-Null
@@ -283,14 +283,13 @@ jobs:
                   Select-Object -ExpandProperty Value -First 1
 
               if (-not $targetLibrary) {
-                  Write-Host "  Package is not part of the net8.0 target assets."
+                  Write-Host "  Package is not part of the net10 target assets."
                   continue
               }
 
               $tfmOrder = @(
+                  'net10.0',
                   'net8.0',
-                  'net7.0',
-                  'net6.0',
                   'netstandard2.1',
                   'netstandard2.0',
                   'net472'
