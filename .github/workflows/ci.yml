@@ -189,152 +189,6 @@ jobs:
               $projectPath `
               --packages $packagesPath
 
-      - name: Vendor required PowerShell modules
-        shell: pwsh
-        env:
-          MODULE: ${{ needs.prepare.outputs.module }}
-        run: |
-          $modulePath = Join-Path $PWD "src/$env:MODULE"
-          $metadataPath = Join-Path $modulePath "$env:MODULE.json"
-          $buildPath = Join-Path $PWD ".build/$env:MODULE"
-          $resourcesPath = Join-Path $buildPath "resources"
-          $outPath = Join-Path $buildPath "out"
-          $vendoredPath = Join-Path $outPath "Vendored"
-
-          $metadata = Get-Content $metadataPath -Raw |
-              ConvertFrom-Json
-
-          $requiredModules = @($metadata.requiredModules)
-
-          if ($requiredModules.Count -eq 0) {
-              Write-Host "No required PowerShell modules declared."
-              exit 0
-          }
-
-          New-Item `
-              -ItemType Directory `
-              -Path $resourcesPath `
-              -Force |
-              Out-Null
-
-          New-Item `
-              -ItemType Directory `
-              -Path $vendoredPath `
-              -Force |
-              Out-Null
-
-          foreach ($requiredModule in $requiredModules) {
-              if (-not $requiredModule.moduleName) {
-                  throw "Required PowerShell module is missing moduleName."
-              }
-
-              if (-not $requiredModule.moduleVersion) {
-                  throw "Required PowerShell module '$($requiredModule.moduleName)' is missing moduleVersion."
-              }
-
-              if (-not $requiredModule.repository) {
-                  throw "Required PowerShell module '$($requiredModule.moduleName)' is missing repository."
-              }
-
-              $moduleName = [string]$requiredModule.moduleName
-              $moduleVersion = [string]$requiredModule.moduleVersion
-              $repository = [string]$requiredModule.repository
-
-              $savePath = Join-Path `
-                  $resourcesPath `
-                  "$moduleName-$moduleVersion"
-
-              $destinationPath = Join-Path `
-                  $vendoredPath `
-                  $moduleName
-
-              $destinationPath = Join-Path `
-                  $destinationPath `
-                  $moduleVersion
-
-              Write-Host ""
-              Write-Host "Saving PowerShell module:"
-              Write-Host "  Name:       $moduleName"
-              Write-Host "  Version:    $moduleVersion"
-              Write-Host "  Repository: $repository"
-              Write-Host "  Save path:  $savePath"
-
-              if (Test-Path $savePath) {
-                  Remove-Item `
-                      -Path $savePath `
-                      -Recurse `
-                      -Force
-              }
-
-              New-Item `
-                  -ItemType Directory `
-                  -Path $savePath `
-                  -Force |
-                  Out-Null
-
-              Save-PSResource `
-                  -Name $moduleName `
-                  -Version $moduleVersion `
-                  -Repository $repository `
-                  -Path $savePath `
-                  -TrustRepository
-
-              $manifestCandidates = @(
-                  Get-ChildItem `
-                      -Path $savePath `
-                      -Filter "$moduleName.psd1" `
-                      -Recurse `
-                      -File
-              )
-
-              if ($manifestCandidates.Count -ne 1) {
-                  throw "Expected exactly one $moduleName.psd1 after saving $moduleName $moduleVersion. Found $($manifestCandidates.Count)."
-              }
-
-              $sourceModulePath = $manifestCandidates[0].Directory.FullName
-
-              if (Test-Path $destinationPath) {
-                  Remove-Item `
-                      -Path $destinationPath `
-                      -Recurse `
-                      -Force
-              }
-
-              New-Item `
-                  -ItemType Directory `
-                  -Path $destinationPath `
-                  -Force |
-                  Out-Null
-
-              Copy-Item `
-                  -Path (Join-Path $sourceModulePath '*') `
-                  -Destination $destinationPath `
-                  -Recurse `
-                  -Force
-
-              $destinationManifest = Join-Path `
-                  $destinationPath `
-                  "$moduleName.psd1"
-
-              if (-not (Test-Path $destinationManifest -PathType Leaf)) {
-                  throw "Vendored module manifest not found: $destinationManifest"
-              }
-
-              Write-Host "Vendored module:"
-              Write-Host "  $destinationPath"
-          }
-
-          Write-Host ""
-          Write-Host "Vendored PowerShell modules:"
-
-          Get-ChildItem `
-              -Path $vendoredPath `
-              -Recurse `
-              -File |
-              ForEach-Object {
-                  Write-Host "  $($_.FullName.Substring($outPath.Length + 1))"
-              }
-
       - name: Upload build
         uses: actions/upload-artifact@v7
         with:
@@ -593,7 +447,6 @@ jobs:
           $metadataPath = Join-Path $modulePath "$env:MODULE.json"
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $outPath = Join-Path $buildPath "out"
-          $vendoredPath = Join-Path $outPath "Vendored"
 
           $packageName = "Amiasea.$env:MODULE"
           $manifestPath = Join-Path $outPath "$packageName.psd1"
@@ -628,67 +481,16 @@ jobs:
                       throw "Required PowerShell module '$($requiredModule.moduleName)' is missing moduleVersion."
                   }
 
-                  $moduleName = [string]$requiredModule.moduleName
-                  $moduleVersion = [string]$requiredModule.moduleVersion
-
-                  $vendoredManifest = Join-Path `
-                      $vendoredPath `
-                      $moduleName
-
-                  $vendoredManifest = Join-Path `
-                      $vendoredManifest `
-                      $moduleVersion
-
-                  $vendoredManifest = Join-Path `
-                      $vendoredManifest `
-                      "$moduleName.psd1"
-
-                  if (-not (Test-Path $vendoredManifest -PathType Leaf)) {
-                      throw "Vendored module manifest not found: $vendoredManifest"
+                  if (-not $requiredModule.repository) {
+                      throw "Required PowerShell module '$($requiredModule.moduleName)' is missing repository."
                   }
 
-                  $relativePath = $vendoredManifest.Substring(
-                      $outPath.Length + 1
-                  )
-
-                  $relativePath = $relativePath.Replace('\', '/')
-
-                  $relativePath
+                  @{
+                      ModuleName    = [string]$requiredModule.moduleName
+                      ModuleVersion = [string]$requiredModule.moduleVersion
+                  }
               }
           )
-
-          $tokens = $null
-          $errors = $null
-
-          $ast = [System.Management.Automation.Language.Parser]::ParseFile(
-              $rootModulePath,
-              [ref]$tokens,
-              [ref]$errors
-          )
-
-          if ($errors) {
-              throw "Parse errors in ${rootModulePath}: $($errors -join '; ')"
-          }
-
-          $nestedModules = @(
-              $ast.UsingStatements |
-                  Where-Object {
-                      $_.UsingStatementKind -eq 'Module' -and
-                      $_.Name.Value -match '^\.[/\\]'
-                  } |
-                  ForEach-Object {
-                      $_.Name.Value -replace '^\.[/\\]', ''
-                  } |
-                  Select-Object -Unique
-          )
-
-          foreach ($nestedModule in $nestedModules) {
-              $nestedModulePath = Join-Path $outPath $nestedModule
-
-              if (-not (Test-Path $nestedModulePath -PathType Leaf)) {
-                  throw "Nested module file not found in build output: $nestedModulePath"
-              }
-          }
 
           $libPath = Join-Path $outPath "lib"
 
@@ -707,13 +509,7 @@ jobs:
 
           Write-Host "Required PowerShell modules:"
           foreach ($requiredModule in $requiredModules) {
-              Write-Host "  $requiredModule"
-          }
-
-          Write-Host ""
-          Write-Host "Nested modules:"
-          foreach ($nestedModule in $nestedModules) {
-              Write-Host "  $nestedModule"
+              Write-Host "  $($requiredModule.ModuleName) $($requiredModule.ModuleVersion)"
           }
 
           Write-Host ""
@@ -733,7 +529,6 @@ jobs:
               -Description "Amiasea $env:MODULE PowerShell module." `
               -PowerShellVersion '7.6' `
               -CompatiblePSEditions 'Core' `
-              -NestedModules $nestedModules `
               -RequiredModules $requiredModules `
               -RequiredAssemblies $requiredAssemblies `
               -FunctionsToExport @(
@@ -805,21 +600,6 @@ jobs:
           if (-not (Test-Path $testPath -PathType Container)) {
               throw "Test directory not found: $testPath"
           }
-
-          $vendoredPath = Join-Path $outPath "Vendored"
-
-          if (-not (Test-Path $vendoredPath -PathType Container)) {
-              throw "Vendored dependency directory not found: $vendoredPath"
-          }
-
-          Write-Host "Vendored dependencies:"
-          Get-ChildItem `
-              -Path $vendoredPath `
-              -Recurse `
-              -File |
-              ForEach-Object {
-                  Write-Host "  $($_.FullName.Substring($outPath.Length + 1))"
-              }
 
           Import-Module $manifestPath -Force
 
@@ -903,6 +683,7 @@ jobs:
 
           Write-Host "Publishing PowerShell resource package:"
           Write-Host "  $packagePath"
+
           dotnet nuget push `
               $packagePath `
               --source "https://nuget.pkg.github.com/$env:PACKAGE_OWNER/index.json" `
