@@ -33,7 +33,7 @@ Describe 'Workspace' {
 
         Mock `
             -CommandName Get-GitHubRepository `
-            -ModuleName Workspace `
+            -ModuleName Amiasea.Workspace `
             -MockWith {
                 $repositories
             }
@@ -105,7 +105,7 @@ Describe 'Workspace' {
 
         Should -Invoke `
             -CommandName Get-GitHubRepository `
-            -ModuleName Workspace `
+            -ModuleName Amiasea.Workspace `
             -Times 1 `
             -Exactly `
             -ParameterFilter {
@@ -122,7 +122,7 @@ Describe 'Workspace' {
 
         Mock `
             -CommandName Invoke-WorkspaceGitClone `
-            -ModuleName Workspace `
+            -ModuleName Amiasea.Workspace `
             -MockWith {
                 New-Item -ItemType Directory -Path $Path -Force | Out-Null
                 New-Item -ItemType Directory -Path (Join-Path $Path '.git') -Force | Out-Null
@@ -143,7 +143,7 @@ Describe 'Workspace' {
 
         Should -Invoke `
             -CommandName Invoke-WorkspaceGitClone `
-            -ModuleName Workspace `
+            -ModuleName Amiasea.Workspace `
             -Times 4 `
             -Exactly
     }
