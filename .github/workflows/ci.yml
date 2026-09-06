@@ -639,7 +639,8 @@ jobs:
         run: |
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $outPath = Join-Path $buildPath "out"
-          $manifestPath = Join-Path $outPath "$env:MODULE.psd1"
+          $packageName = "Amiasea.$env:MODULE"
+          $manifestPath = Join-Path $outPath "$packageName.psd1"
           $testPath = Join-Path $PWD "test/$env:MODULE"
 
           if (-not (Test-Path $manifestPath -PathType Leaf)) {
