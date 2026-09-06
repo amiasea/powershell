@@ -680,6 +680,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      PACKAGE_OWNER: Amiasea
 
     steps:
       - name: Checkout
@@ -701,7 +703,6 @@ jobs:
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
           VERSION: ${{ needs.prepare.outputs.version }}
-          PACKAGE_OWNER: ${{ github.repository_owner }}
         run: |
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $outPath = Join-Path $buildPath "out"
@@ -738,7 +739,6 @@ jobs:
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
           VERSION: ${{ needs.prepare.outputs.version }}
-          PACKAGE_OWNER: ${{ github.repository_owner }}
         run: |
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $packageName = "$env:PACKAGE_OWNER.$env:MODULE"
@@ -763,7 +763,6 @@ jobs:
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
           VERSION: ${{ needs.prepare.outputs.version }}
-          PACKAGE_OWNER: ${{ github.repository_owner }}
           NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
@@ -772,7 +771,7 @@ jobs:
 
           dotnet nuget push `
               $packagePath `
-              --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" `
+              --source "https://nuget.pkg.github.com/$env:PACKAGE_OWNER/index.json" `
               --api-key $env:NUGET_AUTH_TOKEN `
               --skip-duplicate
 
@@ -781,7 +780,6 @@ jobs:
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
           VERSION: ${{ needs.prepare.outputs.version }}
-          PACKAGE_OWNER: ${{ github.repository_owner }}
         run: |
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $packageName = "$env:PACKAGE_OWNER.$env:MODULE"
