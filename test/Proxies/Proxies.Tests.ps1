@@ -9,7 +9,7 @@ Describe 'Amiasea.Proxies' {
     Context 'Resolve-AmiaseaRequiredResource' {
 
         It 'resolves an Amiasea resource from the Amiasea repository' {
-            Mock Find-PSResource {
+            Mock Find-PSResource -ModuleName Amiasea.Proxies {
                 [pscustomobject]@{
                     Name         = 'Amiasea.Workspace'
                     Version      = '1.2.3'
@@ -21,17 +21,21 @@ Describe 'Amiasea.Proxies' {
                 -Name 'Amiasea.Workspace' `
                 -Version '1.2.3'
 
-            Should -Invoke Find-PSResource -Times 1 -Exactly -ParameterFilter {
-                $Name -eq 'Amiasea.Workspace' -and
-                $Version -eq '1.2.3' -and
-                $Repository -eq 'Amiasea'
-            }
+            Should -Invoke Find-PSResource `
+                -ModuleName Amiasea.Proxies `
+                -Times 1 `
+                -Exactly `
+                -ParameterFilter {
+                    $Name -eq 'Amiasea.Workspace' -and
+                    $Version -eq '1.2.3' -and
+                    $Repository -eq 'Amiasea'
+                }
 
             $result | Should -Not -BeNullOrEmpty
         }
 
         It 'returns dependency metadata as RequiredResource entries' {
-            Mock Find-PSResource {
+            Mock Find-PSResource -ModuleName Amiasea.Proxies {
                 [pscustomobject]@{
                     Name         = 'Amiasea.Workspace'
                     Version      = '1.2.3'
@@ -71,7 +75,7 @@ Describe 'Amiasea.Proxies' {
         }
 
         It 'omits dependencies without a name' {
-            Mock Find-PSResource {
+            Mock Find-PSResource -ModuleName Amiasea.Proxies {
                 [pscustomobject]@{
                     Name         = 'Amiasea.Workspace'
                     Version      = '1.2.3'
@@ -93,7 +97,9 @@ Describe 'Amiasea.Proxies' {
         }
 
         It 'throws when the Amiasea resource cannot be found' {
-            Mock Find-PSResource { $null }
+            Mock Find-PSResource -ModuleName Amiasea.Proxies {
+                $null
+            }
 
             {
                 Resolve-AmiaseaRequiredResource `
@@ -106,7 +112,7 @@ Describe 'Amiasea.Proxies' {
     Context 'Install-PSResource proxy' {
 
         It 'does not resolve non-Amiasea resources' {
-            Mock Find-PSResource {
+            Mock Find-PSResource -ModuleName Amiasea.Proxies {
                 throw 'Find-PSResource should not have been called.'
             }
 
@@ -116,11 +122,14 @@ Describe 'Amiasea.Proxies' {
                     -WhatIf
             } | Should -Not -Throw
 
-            Should -Invoke Find-PSResource -Times 0 -Exactly
+            Should -Invoke Find-PSResource `
+                -ModuleName Amiasea.Proxies `
+                -Times 0 `
+                -Exactly
         }
 
         It 'does not resolve an Amiasea resource when RequiredResource is supplied' {
-            Mock Find-PSResource {
+            Mock Find-PSResource -ModuleName Amiasea.Proxies {
                 throw 'Find-PSResource should not have been called.'
             }
 
@@ -137,11 +146,14 @@ Describe 'Amiasea.Proxies' {
                     -WhatIf
             } | Should -Not -Throw
 
-            Should -Invoke Find-PSResource -Times 0 -Exactly
+            Should -Invoke Find-PSResource `
+                -ModuleName Amiasea.Proxies `
+                -Times 0 `
+                -Exactly
         }
 
         It 'does not resolve an Amiasea resource when RequiredResourceFile is supplied' {
-            Mock Find-PSResource {
+            Mock Find-PSResource -ModuleName Amiasea.Proxies {
                 throw 'Find-PSResource should not have been called.'
             }
 
@@ -161,7 +173,10 @@ Describe 'Amiasea.Proxies' {
                     -WhatIf
             } | Should -Not -Throw
 
-            Should -Invoke Find-PSResource -Times 0 -Exactly
+            Should -Invoke Find-PSResource `
+                -ModuleName Amiasea.Proxies `
+                -Times 0 `
+                -Exactly
         }
 
         It 'rejects multiple Amiasea resources in one invocation' {
@@ -176,7 +191,7 @@ Describe 'Amiasea.Proxies' {
         }
 
         It 'forwards an explicit version to Find-PSResource' {
-            Mock Find-PSResource {
+            Mock Find-PSResource -ModuleName Amiasea.Proxies {
                 [pscustomobject]@{
                     Name         = 'Amiasea.Workspace'
                     Version      = '1.2.3'
@@ -185,7 +200,7 @@ Describe 'Amiasea.Proxies' {
                 }
             }
 
-            Mock Resolve-AmiaseaRequiredResource {
+            Mock Resolve-AmiaseaRequiredResource -ModuleName Amiasea.Proxies {
                 @{}
             }
 
@@ -196,15 +211,19 @@ Describe 'Amiasea.Proxies' {
                     -WhatIf
             } | Should -Not -Throw
 
-            Should -Invoke Find-PSResource -Times 1 -Exactly -ParameterFilter {
-                $Name -eq 'Amiasea.Workspace' -and
-                $Repository -eq 'Amiasea' -and
-                $Version -eq '1.2.3'
-            }
+            Should -Invoke Find-PSResource `
+                -ModuleName Amiasea.Proxies `
+                -Times 1 `
+                -Exactly `
+                -ParameterFilter {
+                    $Name -eq 'Amiasea.Workspace' -and
+                    $Repository -eq 'Amiasea' -and
+                    $Version -eq '1.2.3'
+                }
         }
 
         It 'forwards Prerelease to Find-PSResource' {
-            Mock Find-PSResource {
+            Mock Find-PSResource -ModuleName Amiasea.Proxies {
                 [pscustomobject]@{
                     Name         = 'Amiasea.Workspace'
                     Version      = '1.2.3'
@@ -213,7 +232,7 @@ Describe 'Amiasea.Proxies' {
                 }
             }
 
-            Mock Resolve-AmiaseaRequiredResource {
+            Mock Resolve-AmiaseaRequiredResource -ModuleName Amiasea.Proxies {
                 @{}
             }
 
@@ -224,15 +243,19 @@ Describe 'Amiasea.Proxies' {
                     -WhatIf
             } | Should -Not -Throw
 
-            Should -Invoke Find-PSResource -Times 1 -Exactly -ParameterFilter {
-                $Name -eq 'Amiasea.Workspace' -and
-                $Repository -eq 'Amiasea' -and
-                $Prerelease
-            }
+            Should -Invoke Find-PSResource `
+                -ModuleName Amiasea.Proxies `
+                -Times 1 `
+                -Exactly `
+                -ParameterFilter {
+                    $Name -eq 'Amiasea.Workspace' -and
+                    $Repository -eq 'Amiasea' -and
+                    $Prerelease
+                }
         }
 
         It 'uses the selected Amiasea version when resolving dependencies' {
-            Mock Find-PSResource {
+            Mock Find-PSResource -ModuleName Amiasea.Proxies {
                 [pscustomobject]@{
                     Name         = 'Amiasea.Workspace'
                     Version      = '1.2.3'
@@ -241,7 +264,7 @@ Describe 'Amiasea.Proxies' {
                 }
             }
 
-            Mock Resolve-AmiaseaRequiredResource {
+            Mock Resolve-AmiaseaRequiredResource -ModuleName Amiasea.Proxies {
                 @{}
             }
 
@@ -252,6 +275,7 @@ Describe 'Amiasea.Proxies' {
             } | Should -Not -Throw
 
             Should -Invoke Resolve-AmiaseaRequiredResource `
+                -ModuleName Amiasea.Proxies `
                 -Times 1 `
                 -Exactly `
                 -ParameterFilter {
@@ -261,7 +285,7 @@ Describe 'Amiasea.Proxies' {
         }
 
         It 'uses the Amiasea repository when resolving an Amiasea resource' {
-            Mock Find-PSResource {
+            Mock Find-PSResource -ModuleName Amiasea.Proxies {
                 [pscustomobject]@{
                     Name         = 'Amiasea.Workspace'
                     Version      = '1.2.3'
@@ -270,7 +294,7 @@ Describe 'Amiasea.Proxies' {
                 }
             }
 
-            Mock Resolve-AmiaseaRequiredResource {
+            Mock Resolve-AmiaseaRequiredResource -ModuleName Amiasea.Proxies {
                 @{}
             }
 
@@ -281,10 +305,14 @@ Describe 'Amiasea.Proxies' {
                     -WhatIf
             } | Should -Not -Throw
 
-            Should -Invoke Find-PSResource -Times 1 -Exactly -ParameterFilter {
-                $Name -eq 'Amiasea.Workspace' -and
-                $Repository -eq 'Amiasea'
-            }
+            Should -Invoke Find-PSResource `
+                -ModuleName Amiasea.Proxies `
+                -Times 1 `
+                -Exactly `
+                -ParameterFilter {
+                    $Name -eq 'Amiasea.Workspace' -and
+                    $Repository -eq 'Amiasea'
+                }
         }
     }
 }
