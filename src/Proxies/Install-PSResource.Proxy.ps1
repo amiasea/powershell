@@ -137,7 +137,7 @@ $proxy =
     $proxy.Substring($end)
 
 #
-# Validate the modified proxy before creating the scriptblock.
+# Validate the modified proxy before creating the function.
 #
 $tokens = $null
 $errors = $null
@@ -152,4 +152,31 @@ if ($errors.Count -gt 0) {
     throw "Modified Install-PSResource proxy failed to parse: $($errors[0].Message)"
 }
 
-. ([scriptblock]::Create($proxy))
+#
+# ProxyCommand::Create() returns the proxy function body, not the function
+# definition itself. Wrap it in the Install-PSResource function before
+# dot-sourcing so the proxy is defined rather than immediately invoked.
+#
+$functionSource = @"
+function Install-PSResource {
+$proxy
+}
+"@
+
+#
+# Validate the complete function definition before creating the scriptblock.
+#
+$tokens = $null
+$errors = $null
+
+[void][System.Management.Automation.Language.Parser]::ParseInput(
+    $functionSource,
+    [ref]$tokens,
+    [ref]$errors
+)
+
+if ($errors.Count -gt 0) {
+    throw "Final Install-PSResource proxy function failed to parse: $($errors[0].Message)"
+}
+
+. ([scriptblock]::Create($functionSource))
