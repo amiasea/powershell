@@ -10,8 +10,63 @@ permissions:
   packages: write
 
 jobs:
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Pester
+        shell: pwsh
+        run: |
+          Install-PSResource `
+              -Name Pester `
+              -Version 6.0.1 `
+              -Repository PSGallery `
+              -TrustRepository `
+              -Scope CurrentUser
+
+      - name: Test unit
+        shell: pwsh
+        run: |
+          $unitTestPaths = @(
+              Get-ChildItem `
+                  -Path $PWD/test `
+                  -Directory `
+                  -Recurse |
+                  Where-Object {
+                      $_.Name -eq 'unit'
+                  } |
+                  Select-Object -ExpandProperty FullName
+          )
+
+          if ($unitTestPaths.Count -eq 0) {
+              throw "No unit test directories were found."
+          }
+
+          Write-Host ""
+          Write-Host "Unit test directories:"
+
+          foreach ($path in $unitTestPaths) {
+              Write-Host "  $path"
+          }
+
+          Write-Host ""
+          Write-Host "Running unit tests..."
+
+          Invoke-Pester `
+              -Path $unitTestPaths `
+              -Output Detailed
+
+
   prepare:
     name: Prepare
+    needs: unit
     runs-on: ubuntu-latest
 
     outputs:
@@ -654,8 +709,8 @@ jobs:
           overwrite: true
 
 
-  test:
-    name: Test (${{ matrix.os }})
+  e2e:
+    name: E2E (${{ matrix.os }})
     needs: [prepare, manifest]
 
     strategy:
@@ -777,7 +832,6 @@ jobs:
               $PWD `
               "test/$env:MODULE_DIRECTORY"
 
-          $unitTestPath = Join-Path $testPath 'unit'
           $e2eTestPath = Join-Path $testPath 'e2e'
 
           if (-not (Test-Path $manifestPath -PathType Leaf)) {
@@ -786,10 +840,6 @@ jobs:
 
           if (-not (Test-Path $testPath -PathType Container)) {
               throw "Test directory not found: $testPath"
-          }
-
-          if (-not (Test-Path $unitTestPath -PathType Container)) {
-              throw "Unit test directory not found: $unitTestPath"
           }
 
           if (-not (Test-Path $e2eTestPath -PathType Container)) {
@@ -801,17 +851,10 @@ jobs:
           Write-Host "  $manifestPath"
 
           Write-Host ""
-          Write-Host "Test directory:"
-          Write-Host "  $testPath"
+          Write-Host "E2E test directory:"
+          Write-Host "  $e2eTestPath"
 
           Import-Module $manifestPath -Force
-
-          Write-Host ""
-          Write-Host "Running unit tests..."
-
-          Invoke-Pester `
-              -Path $unitTestPath `
-              -Output Detailed
 
           Write-Host ""
           Write-Host "Running E2E tests..."
@@ -823,7 +866,7 @@ jobs:
 
   publish:
     name: Publish
-    needs: [prepare, test]
+    needs: [prepare, e2e]
     runs-on: ubuntu-latest
 
     permissions:
