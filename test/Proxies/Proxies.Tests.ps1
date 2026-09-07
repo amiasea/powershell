@@ -126,6 +126,10 @@ Describe 'Proxies' {
                 throw 'Find-PSResource should not have been called.'
             }
 
+            Mock 'Microsoft.PowerShell.PSResourceGet\Install-PSResource' -ModuleName Amiasea.Proxies {
+                return
+            }
+
             {
                 Install-PSResource `
                     -Name 'Some.OtherResource' `
@@ -136,11 +140,20 @@ Describe 'Proxies' {
                 -ModuleName Amiasea.Proxies `
                 -Times 0 `
                 -Exactly
+
+            Should -Invoke 'Microsoft.PowerShell.PSResourceGet\Install-PSResource' `
+                -ModuleName Amiasea.Proxies `
+                -Times 1 `
+                -Exactly
         }
 
         It 'does not resolve an Amiasea resource when RequiredResource is supplied' {
             Mock Find-PSResource -ModuleName Amiasea.Proxies {
                 throw 'Find-PSResource should not have been called.'
+            }
+
+            Mock 'Microsoft.PowerShell.PSResourceGet\Install-PSResource' -ModuleName Amiasea.Proxies {
+                return
             }
 
             $requiredResource = @{
@@ -160,11 +173,20 @@ Describe 'Proxies' {
                 -ModuleName Amiasea.Proxies `
                 -Times 0 `
                 -Exactly
+
+            Should -Invoke 'Microsoft.PowerShell.PSResourceGet\Install-PSResource' `
+                -ModuleName Amiasea.Proxies `
+                -Times 1 `
+                -Exactly
         }
 
         It 'does not resolve an Amiasea resource when RequiredResourceFile is supplied' {
             Mock Find-PSResource -ModuleName Amiasea.Proxies {
                 throw 'Find-PSResource should not have been called.'
+            }
+
+            Mock 'Microsoft.PowerShell.PSResourceGet\Install-PSResource' -ModuleName Amiasea.Proxies {
+                return
             }
 
             $requiredResourceFile = Join-Path $TestDrive 'required.psd1'
@@ -186,6 +208,11 @@ Describe 'Proxies' {
             Should -Invoke Find-PSResource `
                 -ModuleName Amiasea.Proxies `
                 -Times 0 `
+                -Exactly
+
+            Should -Invoke 'Microsoft.PowerShell.PSResourceGet\Install-PSResource' `
+                -ModuleName Amiasea.Proxies `
+                -Times 1 `
                 -Exactly
         }
 
