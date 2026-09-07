@@ -33,7 +33,6 @@ Describe 'Proxies' {
                         $Repository -eq 'Amiasea'
                     }
 
-                Should -Not -BeNull -ActualValue $result
                 Should -BeOfType -ExpectedType ([hashtable]) -ActualValue $result
                 $result.Count | Should -Be 0
             }
