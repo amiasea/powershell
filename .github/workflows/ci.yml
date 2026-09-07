@@ -16,6 +16,7 @@ jobs:
 
     outputs:
       module: ${{ steps.tag.outputs.module }}
+      moduleDirectory: ${{ steps.tag.outputs.moduleDirectory }}
       version: ${{ steps.tag.outputs.version }}
 
     steps:
@@ -33,22 +34,26 @@ jobs:
           }
 
           $module = $Matches.module
+          $moduleDirectory = $module.ToLowerInvariant()
           $version = $Matches.version
 
           "module=$module" >> $env:GITHUB_OUTPUT
+          "moduleDirectory=$moduleDirectory" >> $env:GITHUB_OUTPUT
           "version=$version" >> $env:GITHUB_OUTPUT
 
-          Write-Host "Module:  $module"
-          Write-Host "Version: $version"
+          Write-Host "Module:           $module"
+          Write-Host "Module directory: $moduleDirectory"
+          Write-Host "Version:          $version"
 
       - name: Prepare build
         shell: pwsh
         env:
           MODULE: ${{ steps.tag.outputs.module }}
+          MODULE_DIRECTORY: ${{ steps.tag.outputs.moduleDirectory }}
         run: |
-          $modulePath = Join-Path $PWD "src/$env:MODULE"
+          $modulePath = Join-Path $PWD "src/$env:MODULE_DIRECTORY"
           $metadataPath = Join-Path $modulePath "$env:MODULE.json"
-          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $buildPath = Join-Path $PWD ".build/$env:MODULE_DIRECTORY"
           $outPath = Join-Path $buildPath "out"
           $packagesPath = Join-Path $buildPath "packages"
           $resourcesPath = Join-Path $buildPath "resources"
@@ -97,6 +102,7 @@ jobs:
                   -Recurse `
                   -Force
 
+          Write-Host "Module directory: $modulePath"
           Write-Host "Build output: $outPath"
           Write-Host "NuGet packages: $packagesPath"
           Write-Host "PSResources: $resourcesPath"
@@ -105,7 +111,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: build-${{ steps.tag.outputs.module }}
-          path: .build/${{ steps.tag.outputs.module }}
+          path: .build/${{ steps.tag.outputs.moduleDirectory }}
           if-no-files-found: error
 
 
@@ -122,7 +128,7 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
-          path: .build/${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.moduleDirectory }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -133,10 +139,11 @@ jobs:
         shell: pwsh
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
+          MODULE_DIRECTORY: ${{ needs.prepare.outputs.moduleDirectory }}
         run: |
-          $modulePath = Join-Path $PWD "src/$env:MODULE"
+          $modulePath = Join-Path $PWD "src/$env:MODULE_DIRECTORY"
           $metadataPath = Join-Path $modulePath "$env:MODULE.json"
-          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $buildPath = Join-Path $PWD ".build/$env:MODULE_DIRECTORY"
           $projectPath = Join-Path $buildPath "$env:MODULE.csproj"
           $packagesPath = Join-Path $buildPath "packages"
 
@@ -193,7 +200,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
-          path: .build/${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.moduleDirectory }}
           if-no-files-found: error
           overwrite: true
 
@@ -211,16 +218,17 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
-          path: .build/${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.moduleDirectory }}
 
       - name: Materialize NuGet assets
         shell: pwsh
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
+          MODULE_DIRECTORY: ${{ needs.prepare.outputs.moduleDirectory }}
         run: |
-          $modulePath = Join-Path $PWD "src/$env:MODULE"
+          $modulePath = Join-Path $PWD "src/$env:MODULE_DIRECTORY"
           $metadataPath = Join-Path $modulePath "$env:MODULE.json"
-          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $buildPath = Join-Path $PWD ".build/$env:MODULE_DIRECTORY"
           $assetsPath = Join-Path $buildPath "obj/project.assets.json"
           $packagesPath = Join-Path $buildPath "packages"
           $outPath = Join-Path $buildPath "out"
@@ -417,7 +425,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
-          path: .build/${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.moduleDirectory }}
           if-no-files-found: error
           overwrite: true
 
@@ -435,19 +443,20 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
-          path: .build/${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.moduleDirectory }}
 
       - name: Build module manifest
         shell: pwsh
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
+          MODULE_DIRECTORY: ${{ needs.prepare.outputs.moduleDirectory }}
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          $modulePath = Join-Path $PWD "src/$env:MODULE"
+          $modulePath = Join-Path $PWD "src/$env:MODULE_DIRECTORY"
           $metadataPath = Join-Path $modulePath "$env:MODULE.json"
           $sourceRootModulePath = Join-Path $modulePath "$env:MODULE.psm1"
 
-          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $buildPath = Join-Path $PWD ".build/$env:MODULE_DIRECTORY"
           $outPath = Join-Path $buildPath "out"
 
           $packageName = "Amiasea.$env:MODULE"
@@ -640,7 +649,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
-          path: .build/${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.moduleDirectory }}
           if-no-files-found: error
           overwrite: true
 
@@ -670,7 +679,7 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
-          path: .build/${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.moduleDirectory }}
 
       - name: Install Pester
         shell: pwsh
@@ -686,9 +695,10 @@ jobs:
         shell: pwsh
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
+          MODULE_DIRECTORY: ${{ needs.prepare.outputs.moduleDirectory }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $modulePath = Join-Path $PWD "src/$env:MODULE"
+          $modulePath = Join-Path $PWD "src/$env:MODULE_DIRECTORY"
           $metadataPath = Join-Path $modulePath "$env:MODULE.json"
 
           $metadata = Get-Content $metadataPath -Raw |
@@ -755,8 +765,9 @@ jobs:
         shell: pwsh
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
+          MODULE_DIRECTORY: ${{ needs.prepare.outputs.moduleDirectory }}
         run: |
-          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $buildPath = Join-Path $PWD ".build/$env:MODULE_DIRECTORY"
           $outPath = Join-Path $buildPath "out"
 
           $packageName = "Amiasea.$env:MODULE"
@@ -764,7 +775,7 @@ jobs:
 
           $testPath = Join-Path `
               $PWD `
-              "test/$($env:MODULE.ToLowerInvariant())"
+              "test/$env:MODULE_DIRECTORY"
 
           $unitTestPath = Join-Path $testPath 'unit'
           $e2eTestPath = Join-Path $testPath 'e2e'
@@ -830,15 +841,16 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: build-${{ needs.prepare.outputs.module }}
-          path: .build/${{ needs.prepare.outputs.module }}
+          path: .build/${{ needs.prepare.outputs.moduleDirectory }}
 
       - name: Package PowerShell resource
         shell: pwsh
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
+          MODULE_DIRECTORY: ${{ needs.prepare.outputs.moduleDirectory }}
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $buildPath = Join-Path $PWD ".build/$env:MODULE_DIRECTORY"
           $outPath = Join-Path $buildPath "out"
           $packageName = "$env:PACKAGE_OWNER.$env:MODULE"
           $packagePath = Join-Path $buildPath "$packageName.$env:VERSION.nupkg"
@@ -861,10 +873,11 @@ jobs:
         shell: pwsh
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
+          MODULE_DIRECTORY: ${{ needs.prepare.outputs.moduleDirectory }}
           VERSION: ${{ needs.prepare.outputs.version }}
           NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $buildPath = Join-Path $PWD ".build/$env:MODULE_DIRECTORY"
           $packageName = "$env:PACKAGE_OWNER.$env:MODULE"
           $packagePath = Join-Path $buildPath "$packageName.$env:VERSION.nupkg"
 
@@ -881,9 +894,10 @@ jobs:
         shell: pwsh
         env:
           MODULE: ${{ needs.prepare.outputs.module }}
+          MODULE_DIRECTORY: ${{ needs.prepare.outputs.moduleDirectory }}
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          $buildPath = Join-Path $PWD ".build/$env:MODULE"
+          $buildPath = Join-Path $PWD ".build/$env:MODULE_DIRECTORY"
           $packageName = "$env:PACKAGE_OWNER.$env:MODULE"
           $packagePath = Join-Path $buildPath "$packageName.$env:VERSION.nupkg"
 
