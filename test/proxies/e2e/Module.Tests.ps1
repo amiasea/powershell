@@ -1,4 +1,5 @@
-# Built/published module surface: exports, command type, private functions, manifest/package loadingusing module ../../../.build/proxies/out/Amiasea.Proxies.psd1
+# Built module surface: exports, command type, private functions, manifest/package loading
+using module ../../../.build/proxies/out/Amiasea.Proxies.psd1
 
 BeforeAll {
     $modulePath = Join-Path `
@@ -10,11 +11,16 @@ BeforeAll {
 
 Describe 'Amiasea.Proxies module' {
 
-    It 'loads the published module' {
+    It 'loads the built module' {
         $module = Get-Module Amiasea.Proxies
 
         $module |
             Should -Not -BeNullOrEmpty
+    }
+
+    It 'loads the module manifest' {
+        $modulePath |
+            Should -Exist
     }
 
     It 'registers Install-PSResource as a function' {
