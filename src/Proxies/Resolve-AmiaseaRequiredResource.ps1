@@ -33,7 +33,7 @@ function Resolve-AmiaseaRequiredResource {
         }
 
         $dependencySpec = @{
-            version = [string]$dependency.Version
+            version = [string]$dependency.VersionRange
         }
 
         if ($dependency.Repository) {

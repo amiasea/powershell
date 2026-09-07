@@ -31,31 +31,37 @@ function ConvertTo-AmiaseaInstallParameters {
 
     $amiaseaName = [string]$amiaseaNames[0]
 
-    $findParameters = @{
-        Name        = $amiaseaName
-        Repository  = 'Amiasea'
-        ErrorAction = 'Stop'
+    $selectedVersion = $null
+
+    if (
+        $BoundParameters.ContainsKey('Version') -and
+        $null -ne $BoundParameters['Version']
+    ) {
+        $selectedVersion = [string]$BoundParameters['Version']
     }
+    else {
+        $findParameters = @{
+            Name        = $amiaseaName
+            Repository  = 'Amiasea'
+            ErrorAction = 'Stop'
+        }
 
-    if ($BoundParameters.ContainsKey('Version')) {
-        $findParameters['Version'] = $BoundParameters['Version']
-    }
+        if ($BoundParameters.ContainsKey('Prerelease')) {
+            $findParameters['Prerelease'] = $BoundParameters['Prerelease']
+        }
 
-    if ($BoundParameters.ContainsKey('Prerelease')) {
-        $findParameters['Prerelease'] = $BoundParameters['Prerelease']
-    }
+        $resource = Find-PSResource @findParameters |
+            Select-Object -First 1
 
-    $resource = Find-PSResource @findParameters |
-        Select-Object -First 1
+        if ($null -eq $resource) {
+            throw "Amiasea resource '$amiaseaName' could not be found."
+        }
 
-    if ($null -eq $resource) {
-        throw "Amiasea resource '$amiaseaName' could not be found."
-    }
+        $selectedVersion = [string]$resource.Version
 
-    $selectedVersion = [string]$resource.Version
-
-    if ($resource.Prerelease) {
-        $selectedVersion += "-$($resource.Prerelease)"
+        if ($resource.Prerelease) {
+            $selectedVersion += "-$($resource.Prerelease)"
+        }
     }
 
     $requiredResource = Resolve-AmiaseaRequiredResource `
