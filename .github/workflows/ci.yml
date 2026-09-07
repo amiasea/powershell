@@ -36,26 +36,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $unitTestPaths = @(
+          $unitTestDirectories = @(
               Get-ChildItem `
                   -Path $PWD/test `
                   -Directory `
                   -Recurse |
                   Where-Object {
-                      $_.Name -ieq 'unit'
+                      $_.Name -eq 'unit'
                   }
           )
 
-          if ($unitTestPaths.Count -eq 0) {
+          if ($unitTestDirectories.Count -eq 0) {
               throw "No unit test directories were found."
           }
 
-          $requiredModules = @{}
+          foreach ($unitTestDirectory in $unitTestDirectories) {
+              $moduleDirectoryName = $unitTestDirectory.Parent.Name
 
-          foreach ($unitTestPath in $unitTestPaths) {
-              $moduleDirectoryName = $unitTestPath.Parent.Name
-
-              $moduleDirectory = Get-ChildItem `
+              $sourceModuleDirectory = Get-ChildItem `
                   -Path $PWD/src `
                   -Directory |
                   Where-Object {
@@ -63,19 +61,27 @@ jobs:
                   } |
                   Select-Object -First 1
 
-              if ($null -eq $moduleDirectory) {
-                  throw "Source module directory not found for unit test directory: $($unitTestPath.Parent.FullName)"
+              if ($null -eq $sourceModuleDirectory) {
+                  throw "Source module directory not found for unit test directory: $($unitTestDirectory.FullName)"
               }
 
-              $moduleName = $moduleDirectory.Name
+              $moduleName = $sourceModuleDirectory.Name
 
               $metadataPath = Join-Path `
-                  $moduleDirectory.FullName `
+                  $sourceModuleDirectory.FullName `
                   "$moduleName.json"
 
               if (-not (Test-Path $metadataPath -PathType Leaf)) {
                   throw "Module metadata not found: $metadataPath"
               }
+
+              Write-Host ""
+              Write-Host "Module:"
+              Write-Host "  $moduleName"
+
+              Write-Host ""
+              Write-Host "Module metadata:"
+              Write-Host "  $metadataPath"
 
               $metadata = Get-Content $metadataPath -Raw |
                   ConvertFrom-Json
@@ -93,61 +99,55 @@ jobs:
                       throw "Required PowerShell module '$($requiredModule.moduleName)' is missing repository."
                   }
 
-                  $key = "$($requiredModule.repository)|$($requiredModule.moduleName)|$($requiredModule.moduleVersion)"
+                  $repository = [string]$requiredModule.repository
 
-                  $requiredModules[$key] = $requiredModule
+                  switch ($repository) {
+                      'PSGallery' {
+                          $installParameters = @{
+                              Name            = $requiredModule.moduleName
+                              Version         = $requiredModule.moduleVersion
+                              Repository      = $repository
+                              TrustRepository = $true
+                              Scope           = 'CurrentUser'
+                          }
+                      }
+
+                      'Amiasea' {
+                          if (-not $env:GITHUB_TOKEN) {
+                              throw "GITHUB_TOKEN is required to install PowerShell module '$($requiredModule.moduleName)' from the Amiasea repository."
+                          }
+
+                          $installParameters = @{
+                              Name            = $requiredModule.moduleName
+                              Version         = $requiredModule.moduleVersion
+                              Repository      = $repository
+                              TrustRepository = $true
+                              Scope           = 'CurrentUser'
+                              Credential      = [System.Management.Automation.PSCredential]::new(
+                                  'USERNAME',
+                                  (ConvertTo-SecureString `
+                                      $env:GITHUB_TOKEN `
+                                      -AsPlainText `
+                                      -Force)
+                              )
+                          }
+                      }
+
+                      default {
+                          throw "Unsupported PowerShell module repository '$repository' for required module '$($requiredModule.moduleName)'. CI authentication for this repository must be implemented before the dependency can be used."
+                      }
+                  }
+
+                  Write-Host "Installing $($requiredModule.moduleName) $($requiredModule.moduleVersion) from $repository..."
+
+                  Install-PSResource @installParameters
               }
-          }
-
-          foreach ($requiredModule in $requiredModules.Values) {
-              $repository = [string]$requiredModule.repository
-
-              switch ($repository) {
-                  'PSGallery' {
-                      $installParameters = @{
-                          Name            = $requiredModule.moduleName
-                          Version         = $requiredModule.moduleVersion
-                          Repository      = $repository
-                          TrustRepository = $true
-                          Scope           = 'CurrentUser'
-                      }
-                  }
-
-                  'Amiasea' {
-                      if (-not $env:GITHUB_TOKEN) {
-                          throw "GITHUB_TOKEN is required to install PowerShell module '$($requiredModule.moduleName)' from the Amiasea repository."
-                      }
-
-                      $installParameters = @{
-                          Name            = $requiredModule.moduleName
-                          Version         = $requiredModule.moduleVersion
-                          Repository      = $repository
-                          TrustRepository = $true
-                          Scope           = 'CurrentUser'
-                          Credential      = [System.Management.Automation.PSCredential]::new(
-                              'USERNAME',
-                              (ConvertTo-SecureString `
-                                  $env:GITHUB_TOKEN `
-                                  -AsPlainText `
-                                  -Force)
-                          )
-                      }
-                  }
-
-                  default {
-                      throw "Unsupported PowerShell module repository '$repository' for required module '$($requiredModule.moduleName)'. CI authentication for this repository must be implemented before the dependency can be used."
-                  }
-              }
-
-              Write-Host "Installing $($requiredModule.moduleName) $($requiredModule.moduleVersion) from $repository..."
-
-              Install-PSResource @installParameters
           }
 
       - name: Test unit
         shell: pwsh
         run: |
-          $unitTestPaths = @(
+          $unitTestDirectories = @(
               Get-ChildItem `
                   -Path $PWD/test `
                   -Directory `
@@ -158,14 +158,14 @@ jobs:
                   Select-Object -ExpandProperty FullName
           )
 
-          if ($unitTestPaths.Count -eq 0) {
+          if ($unitTestDirectories.Count -eq 0) {
               throw "No unit test directories were found."
           }
 
           Write-Host ""
           Write-Host "Unit test directories:"
 
-          foreach ($path in $unitTestPaths) {
+          foreach ($path in $unitTestDirectories) {
               Write-Host "  $path"
           }
 
@@ -173,7 +173,7 @@ jobs:
           Write-Host "Running unit tests..."
 
           Invoke-Pester `
-              -Path $unitTestPaths `
+              -Path $unitTestDirectories `
               -Output Detailed
 
 
