@@ -68,7 +68,7 @@ Describe 'Install-PSResource external dependency resolution' {
         Should -Invoke `
             -CommandName Find-PSResource `
             -ModuleName Amiasea.Proxies `
-            -Times 2 `
+            -Times 3 `
             -Exactly
 
         Should -Invoke `
