@@ -25,7 +25,12 @@ jobs:
       - name: Install Pester
         shell: pwsh
         run: |
-          Install-Module -Name Pester -AllowPrerelease
+          Install-PSResource `
+            -Name Pester `
+            -Prerelease `
+            -Repository PSGallery `
+            -TrustRepository `
+            -Scope CurrentUser
 
       - name: Install required PowerShell modules
         shell: pwsh
@@ -832,7 +837,12 @@ jobs:
       - name: Install Pester
         shell: pwsh
         run: |
-          Install-Module -Name Pester -AllowPrerelease
+          Install-PSResource `
+            -Name Pester `
+            -Prerelease `
+            -Repository PSGallery `
+            -TrustRepository `
+            -Scope CurrentUser
 
       - name: Install required PowerShell modules
         shell: pwsh
