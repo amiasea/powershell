@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
   packages: write
-
+  
 jobs:
   unit:
     name: Unit tests
@@ -16,6 +16,7 @@ jobs:
 
     permissions:
       contents: read
+      packages: write
 
     steps:
       - name: Checkout
@@ -51,13 +52,13 @@ jobs:
           }
 
           foreach ($unitTestDirectory in $unitTestDirectories) {
-              $moduleDirectoryName = $unitTestDirectory.Parent.Name
+              $moduleDirectory = $unitTestDirectory.Parent
 
               $sourceModuleDirectory = Get-ChildItem `
                   -Path $PWD/src `
                   -Directory |
                   Where-Object {
-                      $_.Name -ieq $moduleDirectoryName
+                      $_.Name -ieq $moduleDirectory.Name
                   } |
                   Select-Object -First 1
 
@@ -74,14 +75,6 @@ jobs:
               if (-not (Test-Path $metadataPath -PathType Leaf)) {
                   throw "Module metadata not found: $metadataPath"
               }
-
-              Write-Host ""
-              Write-Host "Module:"
-              Write-Host "  $moduleName"
-
-              Write-Host ""
-              Write-Host "Module metadata:"
-              Write-Host "  $metadataPath"
 
               $metadata = Get-Content $metadataPath -Raw |
                   ConvertFrom-Json
