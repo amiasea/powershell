@@ -1,8 +1,8 @@
-using module ../../.build/Workspace/out/Workspace.Types.psm1
-using module ../../.build/Workspace/out/Amiasea.Workspace.psd1
+using module ../../../.build/workspace/out/Workspace.Types.psm1
+using module ../../../.build/workspace/out/Amiasea.Workspace.psd1
 
 BeforeAll {
-    $modulePath = Join-Path $PSScriptRoot '../../.build/Workspace/out/Amiasea.Workspace.psd1'
+    $modulePath = Join-Path $PSScriptRoot '../../../.build/workspace/out/Amiasea.Workspace.psd1'
 
     Import-Module $modulePath -Force
 }
@@ -124,22 +124,38 @@ Describe 'Workspace' {
             -CommandName Invoke-WorkspaceGitClone `
             -ModuleName Amiasea.Workspace `
             -MockWith {
-                New-Item -ItemType Directory -Path $Path -Force | Out-Null
-                New-Item -ItemType Directory -Path (Join-Path $Path '.git') -Force | Out-Null
+                New-Item `
+                    -ItemType Directory `
+                    -Path $Path `
+                    -Force |
+                    Out-Null
+
+                New-Item `
+                    -ItemType Directory `
+                    -Path (Join-Path $Path '.git') `
+                    -Force |
+                    Out-Null
             }
 
         Build-Workspace -Workspace $workspace
 
-        Write-Host ""
-        Write-Host "Built workspace:"
-        Get-ChildItem `
-            -Path $workspaceRoot `
-            -Recurse |
-            ForEach-Object {
-                Write-Host "  $($_.FullName.Substring($workspaceRoot.Length + 1))"
-            }
+        $apiPath = Join-Path $workspaceRoot 'api'
+        $webPath = Join-Path $workspaceRoot 'web'
+        $platformPath = Join-Path $workspaceRoot 'platform'
+        $platformApiPath = Join-Path $workspaceRoot 'platform/api'
+        $platformWebPath = Join-Path $workspaceRoot 'platform/web'
 
         $workspaceRoot | Should -Exist
+        $apiPath | Should -Exist
+        $webPath | Should -Exist
+        $platformPath | Should -Exist
+        $platformApiPath | Should -Exist
+        $platformWebPath | Should -Exist
+
+        (Join-Path $apiPath '.git') | Should -Exist
+        (Join-Path $webPath '.git') | Should -Exist
+        (Join-Path $platformApiPath '.git') | Should -Exist
+        (Join-Path $platformWebPath '.git') | Should -Exist
 
         Should -Invoke `
             -CommandName Invoke-WorkspaceGitClone `

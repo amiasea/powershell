@@ -646,9 +646,17 @@ jobs:
 
 
   test:
-    name: Test
+    name: Test (${{ matrix.os }})
     needs: [prepare, manifest]
-    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+
+    runs-on: ${{ matrix.os }}
 
     permissions:
       contents: read
@@ -750,9 +758,16 @@ jobs:
         run: |
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $outPath = Join-Path $buildPath "out"
+
           $packageName = "Amiasea.$env:MODULE"
           $manifestPath = Join-Path $outPath "$packageName.psd1"
-          $testPath = Join-Path $PWD "test/$($env:MODULE.ToLowerInvariant())"
+
+          $testPath = Join-Path `
+              $PWD `
+              "test/$($env:MODULE.ToLowerInvariant())"
+
+          $unitTestPath = Join-Path $testPath 'unit'
+          $e2eTestPath = Join-Path $testPath 'e2e'
 
           if (-not (Test-Path $manifestPath -PathType Leaf)) {
               throw "Built module manifest not found: $manifestPath"
@@ -762,10 +777,36 @@ jobs:
               throw "Test directory not found: $testPath"
           }
 
+          if (-not (Test-Path $unitTestPath -PathType Container)) {
+              throw "Unit test directory not found: $unitTestPath"
+          }
+
+          if (-not (Test-Path $e2eTestPath -PathType Container)) {
+              throw "E2E test directory not found: $e2eTestPath"
+          }
+
+          Write-Host ""
+          Write-Host "Built module:"
+          Write-Host "  $manifestPath"
+
+          Write-Host ""
+          Write-Host "Test directory:"
+          Write-Host "  $testPath"
+
           Import-Module $manifestPath -Force
 
+          Write-Host ""
+          Write-Host "Running unit tests..."
+
           Invoke-Pester `
-              -Path $testPath `
+              -Path $unitTestPath `
+              -Output Detailed
+
+          Write-Host ""
+          Write-Host "Running E2E tests..."
+
+          Invoke-Pester `
+              -Path $e2eTestPath `
               -Output Detailed
 
 
@@ -773,9 +814,11 @@ jobs:
     name: Publish
     needs: [prepare, test]
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
       packages: write
+
     env:
       PACKAGE_OWNER: Amiasea
 

@@ -1,5 +1,5 @@
 BeforeAll {
-    . (Join-Path $PSScriptRoot '../../../src/Proxies/Resolve-AmiaseaRequiredResource.ps1')
+    . (Join-Path $PSScriptRoot '../../../src/proxies/Resolve-AmiaseaRequiredResource.ps1')
 }
 
 Describe 'Resolve-AmiaseaRequiredResource' {

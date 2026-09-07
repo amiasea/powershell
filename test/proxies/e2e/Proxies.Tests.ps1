@@ -1,7 +1,7 @@
-using module ../../../.build/Proxies/out/Amiasea.Proxies.psd1
+using module ../../../.build/proxies/out/Amiasea.Proxies.psd1
 
 BeforeAll {
-    $modulePath = Join-Path $PSScriptRoot '../../../.build/Proxies/out/Amiasea.Proxies.psd1'
+    $modulePath = Join-Path $PSScriptRoot '../../../.build/proxies/out/Amiasea.Proxies.psd1'
 
     Import-Module $modulePath -Force
 }
