@@ -31,6 +31,108 @@ jobs:
               -TrustRepository `
               -Scope CurrentUser
 
+      - name: Install required PowerShell modules
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $unitTestPaths = @(
+              Get-ChildItem `
+                  -Path $PWD/test `
+                  -Directory `
+                  -Recurse |
+                  Where-Object {
+                      $_.Name -eq 'unit'
+                  }
+          )
+
+          if ($unitTestPaths.Count -eq 0) {
+              throw "No unit test directories were found."
+          }
+
+          $requiredModules = @{}
+
+          foreach ($unitTestPath in $unitTestPaths) {
+              $moduleName = $unitTestPath.Parent.Name
+              $modulePath = Join-Path `
+                  $PWD `
+                  "src/$moduleName"
+
+              $metadataPath = Join-Path `
+                  $modulePath `
+                  "$moduleName.json"
+
+              if (-not (Test-Path $metadataPath -PathType Leaf)) {
+                  throw "Module metadata not found: $metadataPath"
+              }
+
+              $metadata = Get-Content $metadataPath -Raw |
+                  ConvertFrom-Json
+
+              foreach ($requiredModule in @($metadata.requiredModules)) {
+                  if (-not $requiredModule.moduleName) {
+                      throw "Required PowerShell module is missing moduleName."
+                  }
+
+                  if (-not $requiredModule.moduleVersion) {
+                      throw "Required PowerShell module '$($requiredModule.moduleName)' is missing moduleVersion."
+                  }
+
+                  if (-not $requiredModule.repository) {
+                      throw "Required PowerShell module '$($requiredModule.moduleName)' is missing repository."
+                  }
+
+                  $key = "$($requiredModule.repository)|$($requiredModule.moduleName)|$($requiredModule.moduleVersion)"
+
+                  $requiredModules[$key] = $requiredModule
+              }
+          }
+
+          foreach ($requiredModule in $requiredModules.Values) {
+              $repository = [string]$requiredModule.repository
+
+              switch ($repository) {
+                  'PSGallery' {
+                      $installParameters = @{
+                          Name            = $requiredModule.moduleName
+                          Version         = $requiredModule.moduleVersion
+                          Repository      = $repository
+                          TrustRepository = $true
+                          Scope           = 'CurrentUser'
+                      }
+                  }
+
+                  'Amiasea' {
+                      if (-not $env:GITHUB_TOKEN) {
+                          throw "GITHUB_TOKEN is required to install PowerShell module '$($requiredModule.moduleName)' from the Amiasea repository."
+                      }
+
+                      $installParameters = @{
+                          Name            = $requiredModule.moduleName
+                          Version         = $requiredModule.moduleVersion
+                          Repository      = $repository
+                          TrustRepository = $true
+                          Scope           = 'CurrentUser'
+                          Credential      = [System.Management.Automation.PSCredential]::new(
+                              'USERNAME',
+                              (ConvertTo-SecureString `
+                                  $env:GITHUB_TOKEN `
+                                  -AsPlainText `
+                                  -Force)
+                          )
+                      }
+                  }
+
+                  default {
+                      throw "Unsupported PowerShell module repository '$repository' for required module '$($requiredModule.moduleName)'. CI authentication for this repository must be implemented before the dependency can be used."
+                  }
+              }
+
+              Write-Host "Installing $($requiredModule.moduleName) $($requiredModule.moduleVersion) from $repository..."
+
+              Install-PSResource @installParameters
+          }
+
       - name: Test unit
         shell: pwsh
         run: |
