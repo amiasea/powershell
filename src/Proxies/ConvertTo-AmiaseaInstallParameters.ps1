@@ -5,25 +5,38 @@ function ConvertTo-AmiaseaInstallParameters {
         [hashtable]$BoundParameters
     )
 
-    # Not an Amiasea resource → don't intercept.
     if (
         -not $BoundParameters.ContainsKey('Name') -or
-        @($BoundParameters['Name']).Count -eq 0 -or
-        @($BoundParameters['Name'])[-1] -notmatch '^Amiasea\.'
+        $null -eq $BoundParameters['Name']
     ) {
         return $null
     }
 
-    $amiaseaNames = @($BoundParameters['Name']) |
-        Where-Object {
-            $_ -is [string] -and $_ -match '^Amiasea\.'
-        }
+    $names = $BoundParameters['Name']
+
+    if ($names -is [string]) {
+        $amiaseaNames = @($names)
+    }
+    else {
+        $amiaseaNames = @($names) |
+            Where-Object {
+                $_ -is [string] -and
+                $_ -match '^Amiasea\.'
+            }
+    }
+
+    if ($amiaseaNames.Count -eq 0) {
+        return $null
+    }
 
     if ($amiaseaNames.Count -ne 1) {
         throw 'Install-PSResource proxy currently supports exactly one Amiasea resource per invocation.'
     }
 
     $amiaseaName = [string]$amiaseaNames[0]
+
+    Write-Host "DEBUG Name type: $($BoundParameters['Name'].GetType().FullName)"
+    Write-Host "DEBUG Name value: <$($BoundParameters['Name'])>"
 
     $findParameters = @{
         Name        = $amiaseaName
