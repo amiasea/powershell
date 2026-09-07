@@ -752,7 +752,7 @@ jobs:
           $outPath = Join-Path $buildPath "out"
           $packageName = "Amiasea.$env:MODULE"
           $manifestPath = Join-Path $outPath "$packageName.psd1"
-          $testPath = Join-Path $PWD "test/$env:MODULE"
+          $testPath = Join-Path $PWD "test/$($env:MODULE.ToLowerInvariant())"
 
           if (-not (Test-Path $manifestPath -PathType Leaf)) {
               throw "Built module manifest not found: $manifestPath"
@@ -767,23 +767,6 @@ jobs:
           Invoke-Pester `
               -Path $testPath `
               -Output Detailed
-
-      - name: Show build artifact
-        shell: pwsh
-        env:
-          MODULE: ${{ needs.prepare.outputs.module }}
-        run: |
-          $outPath = Join-Path $PWD ".build/$env:MODULE/out"
-
-          Write-Host "Built module artifact:"
-
-          Get-ChildItem `
-              -Path $outPath `
-              -Recurse `
-              -File |
-              ForEach-Object {
-                  Write-Host "  $($_.FullName.Substring($outPath.Length + 1))"
-              }
 
 
   publish:
