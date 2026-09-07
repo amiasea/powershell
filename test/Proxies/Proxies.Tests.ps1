@@ -29,4 +29,25 @@ Describe 'Proxies' {
                 Should -Not -BeNullOrEmpty
         }
     }
+
+    It 'exports Install-PSResource' {
+        Get-Command Install-PSResource |
+            Should -Not -BeNullOrEmpty
+
+        (Get-Command Install-PSResource).CommandType |
+            Should -Be 'Function'
+    }
+
+    It 'exports the expected functions' {
+        $module = Get-Module Amiasea.Proxies
+
+        $module.ExportedFunctions.Keys |
+            Should -Contain 'Install-PSResource'
+
+        $module.ExportedFunctions.Keys |
+            Should -Contain 'Resolve-AmiaseaRequiredResource'
+
+        $module.ExportedFunctions.Keys |
+            Should -Contain 'ConvertTo-AmiaseaInstallParameters'
+    }
 }
