@@ -23,6 +23,4 @@ if (-not (Test-Path $proxyPath -PathType Leaf)) {
 . $proxyPath
 
 Export-ModuleMember -Function `
-    Install-PSResource, `
-    Resolve-AmiaseaRequiredResource, `
-    ConvertTo-AmiaseaInstallParameters
+    Install-PSResource
