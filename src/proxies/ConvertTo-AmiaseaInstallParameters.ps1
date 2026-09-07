@@ -15,6 +15,18 @@ function ConvertTo-AmiaseaInstallParameters {
     Write-Host "Has Prerelease: $($BoundParameters.ContainsKey('Prerelease'))"
     Write-Host "Prerelease: [$($BoundParameters['Prerelease'])]"
 
+    #
+    # Explicit RequiredResource and RequiredResourceFile requests are already
+    # expressed in the native installation model. The Amiasea converter only
+    # transforms direct Amiasea resource requests.
+    #
+    if (
+        $BoundParameters.ContainsKey('RequiredResource') -or
+        $BoundParameters.ContainsKey('RequiredResourceFile')
+    ) {
+        return $null
+    }
+
     if (
         -not $BoundParameters.ContainsKey('Name') -or
         $null -eq $BoundParameters['Name']
@@ -31,6 +43,10 @@ function ConvertTo-AmiaseaInstallParameters {
         }
     )
 
+    #
+    # Non-Amiasea resources remain entirely under native PSResourceGet
+    # semantics. This converter must not intercept them.
+    #
     if ($amiaseaNames.Count -eq 0) {
         return $null
     }
@@ -43,6 +59,11 @@ function ConvertTo-AmiaseaInstallParameters {
 
     $selectedVersion = $null
 
+    #
+    # An explicitly supplied version is already authoritative for the root
+    # request, so there is no need to perform a second root lookup merely to
+    # discover the same version.
+    #
     if (
         $BoundParameters.ContainsKey('Version') -and
         $null -ne $BoundParameters['Version']
@@ -52,6 +73,12 @@ function ConvertTo-AmiaseaInstallParameters {
         $selectedVersion = [string]$BoundParameters['Version']
     }
     else {
+        #
+        # Amiasea resource discovery is intentionally Amiasea-specific. The
+        # converter establishes the root resource from the Amiasea repository;
+        # the generic dependency resolver is responsible only for resolving
+        # the root's declared dependencies.
+        #
         Write-Host 'No version supplied; resolving root resource with Find-PSResource.'
 
         $findParameters = @{
@@ -86,11 +113,16 @@ function ConvertTo-AmiaseaInstallParameters {
         }
     }
 
-    Write-Host "Calling Resolve-AmiaseaRequiredResource:"
+    #
+    # Dependency resolution itself is delegated to the generic resolver. The
+    # converter supplies the Amiasea root identity and selected version but
+    # does not implement dependency traversal itself.
+    #
+    Write-Host 'Calling Resolve-RequiredResource:'
     Write-Host "  Name: [$amiaseaName]"
     Write-Host "  Version: [$selectedVersion]"
 
-    $requiredResource = Resolve-AmiaseaRequiredResource `
+    $requiredResource = Resolve-RequiredResource `
         -Name $amiaseaName `
         -Version $selectedVersion
 
@@ -104,6 +136,10 @@ function ConvertTo-AmiaseaInstallParameters {
         Write-Host "    repository: [$($dependency['repository'])]"
     }
 
+    #
+    # Preserve all native parameters except the direct resource-selection
+    # parameters that have now been represented by RequiredResource.
+    #
     $result = @{}
 
     foreach ($key in $BoundParameters.Keys) {
@@ -114,6 +150,12 @@ function ConvertTo-AmiaseaInstallParameters {
     $result.Remove('Version')
     $result.Remove('Repository')
 
+    #
+    # The Amiasea root is always explicitly represented as an Amiasea
+    # repository requirement. A caller-supplied Repository does not change
+    # that identity because this converter exists specifically to translate
+    # Amiasea resource requests.
+    #
     $result['RequiredResource'] = @{
         $amiaseaName = @{
             version    = $selectedVersion
@@ -121,6 +163,10 @@ function ConvertTo-AmiaseaInstallParameters {
         }
     }
 
+    #
+    # Add the generic resolver's immediate dependency requirements without
+    # changing their declared version ranges or repository identities.
+    #
     foreach ($dependencyName in $requiredResource.Keys) {
         $result['RequiredResource'][$dependencyName] =
             $requiredResource[$dependencyName]
@@ -142,6 +188,11 @@ function ConvertTo-AmiaseaInstallParameters {
         Write-Host "  $key"
     }
 
+    #
+    # These parameters have been consumed into RequiredResource and must not
+    # remain at the top level where they could cause native PSResourceGet to
+    # perform a second, conflicting root selection.
+    #
     if ($result.ContainsKey('Name')) {
         throw 'Amiasea converter invariant violated: Name remains in transformed parameters.'
     }

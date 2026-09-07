@@ -1,4 +1,4 @@
-$resolvePath = Join-Path $PSScriptRoot 'Resolve-AmiaseaRequiredResource.ps1'
+$resolvePath = Join-Path $PSScriptRoot 'Resolve-RequiredResource.ps1'
 
 if (-not (Test-Path $resolvePath -PathType Leaf)) {
     throw "Amiasea resource resolver not found: $resolvePath"

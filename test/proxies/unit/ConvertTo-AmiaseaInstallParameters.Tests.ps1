@@ -1,5 +1,5 @@
 BeforeAll {
-    . (Join-Path $PSScriptRoot '../../../src/proxies/Resolve-AmiaseaRequiredResource.ps1')
+    . (Join-Path $PSScriptRoot '../../../src/proxies/Resolve-RequiredResource.ps1')
     . (Join-Path $PSScriptRoot '../../../src/proxies/ConvertTo-AmiaseaInstallParameters.ps1')
 }
 
@@ -35,7 +35,7 @@ Describe 'ConvertTo-AmiaseaInstallParameters' {
             }
         }
 
-        Mock Resolve-AmiaseaRequiredResource {
+        Mock Resolve-RequiredResource {
             return ,@{}
         }
 
@@ -51,7 +51,7 @@ Describe 'ConvertTo-AmiaseaInstallParameters' {
                 $Repository -eq 'Amiasea'
             }
 
-        Should -Invoke Resolve-AmiaseaRequiredResource `
+        Should -Invoke Resolve-RequiredResource `
             -Times 1 `
             -Exactly `
             -ParameterFilter {
@@ -70,7 +70,7 @@ Describe 'ConvertTo-AmiaseaInstallParameters' {
             throw 'Find-PSResource should not be called when an explicit version is supplied.'
         }
 
-        Mock Resolve-AmiaseaRequiredResource {
+        Mock Resolve-RequiredResource {
             param(
                 [string]$Name,
                 [object]$Version
@@ -88,7 +88,7 @@ Describe 'ConvertTo-AmiaseaInstallParameters' {
         $result['RequiredResource']['Amiasea.Workspace']['repository'] |
             Should -Be 'Amiasea'
 
-        Should -Invoke Resolve-AmiaseaRequiredResource `
+        Should -Invoke Resolve-RequiredResource `
             -Times 1 `
             -Exactly `
             -ParameterFilter {
@@ -111,7 +111,7 @@ Describe 'ConvertTo-AmiaseaInstallParameters' {
             }
         }
 
-        Mock Resolve-AmiaseaRequiredResource {
+        Mock Resolve-RequiredResource {
             return ,@{}
         }
 
@@ -140,7 +140,7 @@ Describe 'ConvertTo-AmiaseaInstallParameters' {
             }
         }
 
-        Mock Resolve-AmiaseaRequiredResource {
+        Mock Resolve-RequiredResource {
             return ,@{}
         }
 
@@ -163,7 +163,7 @@ Describe 'ConvertTo-AmiaseaInstallParameters' {
             }
         }
 
-        Mock Resolve-AmiaseaRequiredResource {
+        Mock Resolve-RequiredResource {
             return ,@{}
         }
 
@@ -185,7 +185,7 @@ Describe 'ConvertTo-AmiaseaInstallParameters' {
             }
         }
 
-        Mock Resolve-AmiaseaRequiredResource {
+        Mock Resolve-RequiredResource {
             return @{
                 'PowerShellForGitHub' = @{
                     version    = '0.17.0'

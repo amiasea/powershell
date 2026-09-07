@@ -1,204 +1,200 @@
 BeforeAll {
-    . (Join-Path $PSScriptRoot '../../../src/proxies/Resolve-AmiaseaRequiredResource.ps1')
-    . (Join-Path $PSScriptRoot '../../../src/proxies/ConvertTo-AmiaseaInstallParameters.ps1')
-
-    #
-    # Capture the generated proxy function definition so the tests can
-    # inspect the actual invocation boundary without replacing the native
-    # PSResourceGet cmdlet.
-    #
-    $proxyPath = Join-Path `
+    . (Join-Path `
         $PSScriptRoot `
-        '../../../src/proxies/Install-PSResource.Proxy.ps1'
+        '../../../src/proxies/Resolve-RequiredResource.ps1')
 
-    $proxySource = Get-Content `
-        -Path $proxyPath `
-        -Raw
+    . (Join-Path `
+        $PSScriptRoot `
+        '../../../src/proxies/ConvertTo-AmiaseaInstallParameters.ps1')
 
-    #
-    # The proxy source creates the final Install-PSResource function at
-    # load time. Execute it once so the function exists for structural
-    # inspection and invocation tests.
-    #
-    . $proxyPath
+    . (Join-Path `
+        $PSScriptRoot `
+        '../../../src/proxies/Install-PSResource.Proxy.ps1')
 
     $installPSResourceCommand = Get-Command `
         -Name Install-PSResource `
         -CommandType Function `
         -ErrorAction Stop
-
-    $installPSResourceDefinition = $installPSResourceCommand.Definition
 }
 
 Describe 'Install-PSResource proxy' {
 
-    It 'invokes the wrapped native command with PSBoundParameters' {
-        $installPSResourceDefinition |
-            Should -Match '\& \$wrappedCmd @PSBoundParameters'
+    It 'exposes UseExternalDependencyResolution' {
+        $installPSResourceCommand.Parameters.ContainsKey(
+            'UseExternalDependencyResolution'
+        ) |
+            Should -BeTrue
     }
 
-    It 'replaces Amiasea installation parameters with RequiredResource before native invocation' {
-        Mock Find-PSResource {
-            [pscustomobject]@{
-                Name         = 'Amiasea.Workspace'
-                Version      = '1.2.3'
-                Prerelease   = $null
-                Dependencies = @()
-            }
+    It 'invokes external dependency resolution when requested' {
+        Mock `
+            -CommandName 'ConvertTo-AmiaseaInstallParameters' {
+            throw 'STOP AFTER CONVERTER'
         }
 
-        Mock Resolve-AmiaseaRequiredResource {
-            return @{
-                'PowerShellForGitHub' = @{
-                    version    = '[0.17.0,)'
-                    repository = 'PSGallery'
-                }
-            }
-        }
+        {
+            & $installPSResourceCommand.ScriptBlock `
+                -Name 'Amiasea.Test' `
+                -UseExternalDependencyResolution
+        } |
+            Should -Throw 'STOP AFTER CONVERTER'
 
-        $parameters = @{
-            Name  = 'Amiasea.Workspace'
-            Scope = 'CurrentUser'
-        }
-
-        $result = ConvertTo-AmiaseaInstallParameters `
-            -BoundParameters $parameters
-
-        $result |
-            Should -Not -BeNullOrEmpty
-
-        $result.ContainsKey('Name') |
-            Should -BeFalse
-
-        $result.ContainsKey('Version') |
-            Should -BeFalse
-
-        $result.ContainsKey('Repository') |
-            Should -BeFalse
-
-        $result.ContainsKey('RequiredResource') |
-            Should -BeTrue
-
-        $result.RequiredResource.ContainsKey('Amiasea.Workspace') |
-            Should -BeTrue
-
-        $result.RequiredResource['Amiasea.Workspace'].version |
-            Should -Be '1.2.3'
-
-        $result.RequiredResource['Amiasea.Workspace'].repository |
-            Should -Be 'Amiasea'
-
-        $result.RequiredResource.ContainsKey('PowerShellForGitHub') |
-            Should -BeTrue
-
-        $result.RequiredResource['PowerShellForGitHub'].version |
-            Should -Be '[0.17.0,)'
-
-        $result.RequiredResource['PowerShellForGitHub'].repository |
-            Should -Be 'PSGallery'
-
-        $result.Scope |
-            Should -Be 'CurrentUser'
-    }
-
-    It 'does not transform a native invocation that already uses RequiredResource' {
-        Mock Find-PSResource {
-            throw 'Find-PSResource should not be called.'
-        }
-
-        $parameters = @{
-            RequiredResource = @{
-                'Amiasea.Workspace' = @{
-                    version    = '1.2.3'
-                    repository = 'Amiasea'
-                }
-                'PowerShellForGitHub' = @{
-                    version    = '[0.17.0,)'
-                    repository = 'PSGallery'
-                }
-            }
-            Scope = 'CurrentUser'
-        }
-
-        $result = ConvertTo-AmiaseaInstallParameters `
-            -BoundParameters $parameters
-
-        $result |
-            Should -BeNullOrEmpty
-
-        Should -Invoke Find-PSResource `
-            -Times 0 `
+        Should -Invoke `
+            -CommandName 'ConvertTo-AmiaseaInstallParameters' `
+            -Times 1 `
             -Exactly
     }
 
-    It 'preserves native parameters alongside the transformed RequiredResource' {
-        Mock Find-PSResource {
-            [pscustomobject]@{
-                Name         = 'Amiasea.Workspace'
-                Version      = '1.2.3'
-                Prerelease   = $null
-                Dependencies = @()
-            }
+    It 'passes Name to external dependency resolution' {
+        Mock `
+            -CommandName 'ConvertTo-AmiaseaInstallParameters' {
+            throw 'STOP AFTER CONVERTER'
         }
 
-        Mock Resolve-AmiaseaRequiredResource {
-            return ,@{}
-        }
+        {
+            & $installPSResourceCommand.ScriptBlock `
+                -Name 'Amiasea.Test' `
+                -UseExternalDependencyResolution
+        } |
+            Should -Throw 'STOP AFTER CONVERTER'
 
-        $result = ConvertTo-AmiaseaInstallParameters `
-            -BoundParameters @{
-                Name          = 'Amiasea.Workspace'
-                Scope         = 'CurrentUser'
-                TrustRepository = $true
+        Should -Invoke `
+            -CommandName 'ConvertTo-AmiaseaInstallParameters' `
+            -Times 1 `
+            -Exactly `
+            -ParameterFilter {
+                $BoundParameters['Name'] -eq 'Amiasea.Test'
             }
-
-        $result.RequiredResource |
-            Should -Not -BeNullOrEmpty
-
-        $result.RequiredResource['Amiasea.Workspace'].version |
-            Should -Be '1.2.3'
-
-        $result.RequiredResource['Amiasea.Workspace'].repository |
-            Should -Be 'Amiasea'
-
-        $result.Scope |
-            Should -Be 'CurrentUser'
-
-        $result.TrustRepository |
-            Should -BeTrue
     }
 
-    It 'does not leave Name, Version, or Repository at the top level of the transformed parameters' {
-        Mock Find-PSResource {
-            [pscustomobject]@{
-                Name         = 'Amiasea.Workspace'
-                Version      = '1.2.3'
-                Prerelease   = $null
-                Dependencies = @()
-            }
+    It 'passes Version to external dependency resolution when specified' {
+        Mock `
+            -CommandName 'ConvertTo-AmiaseaInstallParameters' {
+            throw 'STOP AFTER CONVERTER'
         }
 
-        Mock Resolve-AmiaseaRequiredResource {
-            return ,@{}
+        {
+            & $installPSResourceCommand.ScriptBlock `
+                -Name 'Amiasea.Test' `
+                -Version '1.2.3' `
+                -UseExternalDependencyResolution
+        } |
+            Should -Throw 'STOP AFTER CONVERTER'
+
+        Should -Invoke `
+            -CommandName 'ConvertTo-AmiaseaInstallParameters' `
+            -Times 1 `
+            -Exactly `
+            -ParameterFilter {
+                $BoundParameters['Name'] -eq 'Amiasea.Test' -and
+                $BoundParameters['Version'] -eq '1.2.3'
+            }
+    }
+
+    It 'passes Prerelease to external dependency resolution when specified' {
+        Mock `
+            -CommandName 'ConvertTo-AmiaseaInstallParameters' {
+            throw 'STOP AFTER CONVERTER'
         }
 
-        $result = ConvertTo-AmiaseaInstallParameters `
-            -BoundParameters @{
-                Name       = 'Amiasea.Workspace'
-                Version    = '1.2.3'
-                Repository = 'PSGallery'
+        {
+            & $installPSResourceCommand.ScriptBlock `
+                -Name 'Amiasea.Test' `
+                -Prerelease `
+                -UseExternalDependencyResolution
+        } |
+            Should -Throw 'STOP AFTER CONVERTER'
+
+        Should -Invoke `
+            -CommandName 'ConvertTo-AmiaseaInstallParameters' `
+            -Times 1 `
+            -Exactly `
+            -ParameterFilter {
+                $BoundParameters['Name'] -eq 'Amiasea.Test' -and
+                $BoundParameters['Prerelease'] -eq $true
             }
+    }
 
-        $result.ContainsKey('Name') |
-            Should -BeFalse
+    It 'does not pass Repository to external dependency resolution' {
+        Mock `
+            -CommandName 'ConvertTo-AmiaseaInstallParameters' {
+            throw 'STOP AFTER CONVERTER'
+        }
 
-        $result.ContainsKey('Version') |
-            Should -BeFalse
+        {
+            & $installPSResourceCommand.ScriptBlock `
+                -Name 'Amiasea.Test' `
+                -Repository 'PSGallery' `
+                -UseExternalDependencyResolution
+        } |
+            Should -Throw 'STOP AFTER CONVERTER'
 
-        $result.ContainsKey('Repository') |
-            Should -BeFalse
+        Should -Invoke `
+            -CommandName 'ConvertTo-AmiaseaInstallParameters' `
+            -Times 1 `
+            -Exactly `
+            -ParameterFilter {
+                $BoundParameters['Name'] -eq 'Amiasea.Test' -and
+                -not $BoundParameters.ContainsKey('Repository')
+            }
+    }
 
-        $result.ContainsKey('RequiredResource') |
-            Should -BeTrue
+    It 'does not pass unrelated native parameters to external dependency resolution' {
+        Mock `
+            -CommandName 'ConvertTo-AmiaseaInstallParameters' {
+            throw 'STOP AFTER CONVERTER'
+        }
+
+        {
+            & $installPSResourceCommand.ScriptBlock `
+                -Name 'Amiasea.Test' `
+                -Version '1.2.3' `
+                -Scope CurrentUser `
+                -TrustRepository `
+                -UseExternalDependencyResolution
+        } |
+            Should -Throw 'STOP AFTER CONVERTER'
+
+        Should -Invoke `
+            -CommandName 'ConvertTo-AmiaseaInstallParameters' `
+            -Times 1 `
+            -Exactly `
+            -ParameterFilter {
+                $BoundParameters['Name'] -eq 'Amiasea.Test' -and
+                $BoundParameters['Version'] -eq '1.2.3' -and
+                -not $BoundParameters.ContainsKey('Scope') -and
+                -not $BoundParameters.ContainsKey('TrustRepository') -and
+                -not $BoundParameters.ContainsKey('Repository')
+            }
+    }
+
+    It 'throws when external resolution returns no installation request' {
+        Mock `
+            -CommandName 'ConvertTo-AmiaseaInstallParameters' {
+            return $null
+        }
+
+        {
+            & $installPSResourceCommand.ScriptBlock `
+                -Name 'Amiasea.Test' `
+                -UseExternalDependencyResolution
+        } |
+            Should -Throw `
+                'External dependency resolution did not produce an Amiasea installation request.'
+    }
+
+    It 'throws when external resolution does not produce RequiredResource' {
+        Mock `
+            -CommandName 'ConvertTo-AmiaseaInstallParameters' {
+            return @{}
+        }
+
+        {
+            & $installPSResourceCommand.ScriptBlock `
+                -Name 'Amiasea.Test' `
+                -UseExternalDependencyResolution
+        } |
+            Should -Throw `
+                'External dependency resolution did not produce RequiredResource entries.'
     }
 }
