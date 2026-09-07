@@ -59,7 +59,7 @@ Describe 'Install-PSResource external dependency resolution' {
     }
 
     It 'uses external dependency resolution before native installation' {
-        Install-PSResource `
+        Amiasea.Proxies\Install-PSResource `
             -Name 'Amiasea.Workspace' `
             -UseExternalDependencyResolution `
             -WhatIf `
@@ -78,7 +78,7 @@ Describe 'Install-PSResource external dependency resolution' {
     }
 
     It 'does not resolve the Amiasea root when an explicit version is supplied' {
-        Install-PSResource `
+        Amiasea.Proxies\Install-PSResource `
             -Name 'Amiasea.Workspace' `
             -Version '1.0.43' `
             -UseExternalDependencyResolution `

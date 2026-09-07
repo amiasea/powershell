@@ -11,13 +11,24 @@ BeforeAll {
 
 Describe 'Install-PSResource native route' {
 
+    BeforeEach {
+        Mock `
+            -CommandName 'Microsoft.PowerShell.PSResourceGet\Install-PSResource' `
+            -MockWith {}
+    }
+
     It 'invokes the native Install-PSResource command without external dependency resolution' {
         {
-            Install-PSResource `
+            Amiasea.Proxies\Install-PSResource `
                 -Name 'Amiasea.Test' `
                 -WhatIf `
                 -ErrorAction Stop
         } |
             Should -Not -Throw
+
+        Should -Invoke `
+            -CommandName 'Microsoft.PowerShell.PSResourceGet\Install-PSResource' `
+            -Times 1 `
+            -Exactly
     }
 }
