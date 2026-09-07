@@ -7,102 +7,48 @@ $proxy = [System.Management.Automation.ProxyCommand]::Create(
     $command
 )
 
-$injectedProcess = @'
-process {
-    $amiaseaNames = @(
-        if ($PSBoundParameters.ContainsKey('Name')) {
-            @($PSBoundParameters['Name']) |
-                Where-Object {
-                    $_ -is [string] -and
-                    $_ -match '^Amiasea\.'
-                }
-        }
-    )
+$injectedBegin = @'
+begin
+{
+    try {
+        #
+        # Transform Amiasea installations before the native
+        # Install-PSResource steppable pipeline is constructed.
+        #
+        $amiaseaParameters = ConvertTo-AmiaseaInstallParameters `
+            -BoundParameters $PSBoundParameters
 
-    if (
-        $amiaseaNames.Count -gt 0 -and
-        -not $PSBoundParameters.ContainsKey('RequiredResource') -and
-        -not $PSBoundParameters.ContainsKey('RequiredResourceFile')
-    ) {
-        if ($amiaseaNames.Count -ne 1) {
-            throw "Install-PSResource proxy currently supports exactly one Amiasea resource per invocation."
+        if ($null -ne $amiaseaParameters) {
+            $PSBoundParameters = $amiaseaParameters
         }
 
-        $amiaseaName = [string]$amiaseaNames[0]
-
-        #
-        # Resolve the Amiasea resource using the same version and prerelease
-        # constraints supplied to Install-PSResource, if any.
-        #
-        $findParameters = @{
-            Name        = $amiaseaName
-            Repository  = 'Amiasea'
-            ErrorAction = 'Stop'
+        $outBuffer = $null
+        if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$outBuffer))
+        {
+            $PSBoundParameters['OutBuffer'] = 1
         }
 
-        if ($PSBoundParameters.ContainsKey('Version')) {
-            $findParameters['Version'] = $PSBoundParameters['Version']
-        }
+        $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand(
+            'Microsoft.PowerShell.PSResourceGet\Install-PSResource',
+            [System.Management.Automation.CommandTypes]::Cmdlet
+        )
 
-        if ($PSBoundParameters.ContainsKey('Prerelease')) {
-            $findParameters['Prerelease'] = $PSBoundParameters['Prerelease']
-        }
+        $scriptCmd = {& $wrappedCmd @PSBoundParameters }
 
-        $resource = Find-PSResource @findParameters |
-            Select-Object -First 1
+        $steppablePipeline = $scriptCmd.GetSteppablePipeline(
+            $myInvocation.CommandOrigin
+        )
 
-        if ($null -eq $resource) {
-            throw "Amiasea resource '$amiaseaName' could not be found."
-        }
-
-        #
-        # Make the selected version explicit.
-        #
-        $selectedVersion = [string]$resource.Version
-
-        if ($resource.Prerelease) {
-            $selectedVersion += "-$($resource.Prerelease)"
-        }
-
-        $PSBoundParameters['Version'] = $selectedVersion
-
-        #
-        # Resolve the dependency metadata for the selected Amiasea resource.
-        #
-        # Resolve-AmiaseaRequiredResource is intentionally internal to the
-        # proxy. There is no public Get-AmiaseaRequiredResources command.
-        #
-        $amiaseaRequiredResource = Resolve-AmiaseaRequiredResource `
-            -Name $amiaseaName `
-            -Version $selectedVersion
-
-        #
-        # RequiredResource is a separate native parameter set, so replace
-        # Name/Version with the equivalent native RequiredResource entry.
-        #
-        $PSBoundParameters.Remove('Name')
-
-        $PSBoundParameters['RequiredResource'] = @{
-            $amiaseaName = @{
-                version    = $selectedVersion
-                repository = 'Amiasea'
-            }
-        }
-
-        foreach ($dependencyName in $amiaseaRequiredResource.Keys) {
-            $PSBoundParameters['RequiredResource'][$dependencyName] =
-                $amiaseaRequiredResource[$dependencyName]
-        }
-
-        $PSBoundParameters.Remove('Version')
+        $steppablePipeline.Begin($PSCmdlet)
     }
-
-    $steppablePipeline.Process($_)
+    catch {
+        throw
+    }
 }
 '@
 
 #
-# Parse the generated proxy so the process block can be located
+# Parse the generated proxy so the begin block can be located
 # structurally rather than by matching braces with a regular expression.
 #
 $tokens = $null
@@ -118,22 +64,22 @@ if ($errors.Count -gt 0) {
     throw "Generated Install-PSResource proxy failed to parse before modification: $($errors[0].Message)"
 }
 
-$processBlock = $ast.ProcessBlock
+$beginBlock = $ast.BeginBlock
 
-if ($null -eq $processBlock) {
-    throw "Unable to locate generated Install-PSResource process block."
+if ($null -eq $beginBlock) {
+    throw "Unable to locate generated Install-PSResource begin block."
 }
 
 #
-# Replace exactly the extent of the top-level process block.
+# Replace exactly the extent of the top-level begin block.
 # The AST extent accounts for nested PowerShell script blocks correctly.
 #
-$start = $processBlock.Extent.StartOffset
-$end   = $processBlock.Extent.EndOffset
+$start = $beginBlock.Extent.StartOffset
+$end   = $beginBlock.Extent.EndOffset
 
 $proxy =
     $proxy.Substring(0, $start) +
-    $injectedProcess.Trim() +
+    $injectedBegin.Trim() +
     $proxy.Substring($end)
 
 #
