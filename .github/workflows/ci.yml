@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
   packages: write
-  
+
 jobs:
   unit:
     name: Unit tests
@@ -52,31 +52,23 @@ jobs:
           }
 
           foreach ($unitTestDirectory in $unitTestDirectories) {
-              $moduleDirectory = $unitTestDirectory.Parent
+              $moduleDirectory = $unitTestDirectory.Parent.Name
 
-              $sourceModuleDirectory = Get-ChildItem `
-                  -Path $PWD/src `
-                  -Directory |
-                  Where-Object {
-                      $_.Name -ieq $moduleDirectory.Name
-                  } |
+              $modulePath = Join-Path `
+                  $PWD `
+                  "src/$moduleDirectory"
+
+              $metadataPath = Get-ChildItem `
+                  -Path $modulePath `
+                  -Filter '*.json' `
+                  -File |
                   Select-Object -First 1
 
-              if ($null -eq $sourceModuleDirectory) {
-                  throw "Source module directory not found for unit test directory: $($unitTestDirectory.FullName)"
+              if ($null -eq $metadataPath) {
+                  throw "Module metadata not found in: $modulePath"
               }
 
-              $moduleName = $sourceModuleDirectory.Name
-
-              $metadataPath = Join-Path `
-                  $sourceModuleDirectory.FullName `
-                  "$moduleName.json"
-
-              if (-not (Test-Path $metadataPath -PathType Leaf)) {
-                  throw "Module metadata not found: $metadataPath"
-              }
-
-              $metadata = Get-Content $metadataPath -Raw |
+              $metadata = Get-Content $metadataPath.FullName -Raw |
                   ConvertFrom-Json
 
               foreach ($requiredModule in @($metadata.requiredModules)) {
