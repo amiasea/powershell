@@ -97,7 +97,7 @@ process {
         $PSBoundParameters.Remove('Version')
     }
 
-    & $scriptCmd @PSBoundParameters
+    $steppablePipeline.Process($_)
 }
 '@
 
