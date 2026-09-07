@@ -1,127 +1,178 @@
-function Resolve-AmiaseaRequiredResource {
+function ConvertTo-AmiaseaInstallParameters {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [string]$Name,
-
-        [Parameter()]
-        [object]$Version
+        [hashtable]$BoundParameters
     )
 
-    Write-Host '=== RESOLVE AMIASEA RESOURCE ==='
-    Write-Host "Name: [$Name]"
-    Write-Host "Version supplied: [$($null -ne $Version)]"
-    Write-Host "Version: [$Version]"
+    Write-Host '=== AMIASEA CONVERTER ==='
 
-    $findParameters = @{
-        Name        = $Name
-        Repository  = 'Amiasea'
-        ErrorAction = 'Stop'
+    Write-Host "Name: [$($BoundParameters['Name'])]"
+    Write-Host "Has Version: $($BoundParameters.ContainsKey('Version'))"
+    Write-Host "Version: [$($BoundParameters['Version'])]"
+    Write-Host "Has Repository: $($BoundParameters.ContainsKey('Repository'))"
+    Write-Host "Repository: [$($BoundParameters['Repository'])]"
+    Write-Host "Has Prerelease: $($BoundParameters.ContainsKey('Prerelease'))"
+    Write-Host "Prerelease: [$($BoundParameters['Prerelease'])]"
+
+    if (
+        -not $BoundParameters.ContainsKey('Name') -or
+        $null -eq $BoundParameters['Name']
+    ) {
+        return $null
     }
 
-    if ($null -ne $Version) {
-        $findParameters['Version'] = $Version
+    $names = @($BoundParameters['Name'])
+
+    $amiaseaNames = @(
+        $names | Where-Object {
+            $_ -is [string] -and
+            $_ -match '^Amiasea\.'
+        }
+    )
+
+    if ($amiaseaNames.Count -eq 0) {
+        return $null
     }
 
-    Write-Host 'Find-PSResource parameters:'
-    foreach ($key in $findParameters.Keys) {
-        Write-Host "  $key = [$($findParameters[$key])]"
+    if ($amiaseaNames.Count -ne 1) {
+        throw 'Install-PSResource proxy currently supports exactly one Amiasea resource per invocation.'
     }
 
-    $resource = Find-PSResource @findParameters |
-        Select-Object -First 1
+    $amiaseaName = [string]$amiaseaNames[0]
 
-    if ($null -eq $resource) {
-        throw "Amiasea resource '$Name' could not be found."
-    }
+    $selectedVersion = $null
 
-    Write-Host 'Resolved resource:'
-    Write-Host "  Name: [$($resource.Name)]"
-    Write-Host "  Version: [$($resource.Version)]"
-    Write-Host "  Prerelease: [$($resource.Prerelease)]"
-    Write-Host "  Repository: [$($resource.Repository)]"
+    if (
+        $BoundParameters.ContainsKey('Version') -and
+        $null -ne $BoundParameters['Version']
+    ) {
+        Write-Host 'Version supplied explicitly; skipping Find-PSResource for root resource.'
 
-    if ([string]$resource.Name -ne $Name) {
-        throw "Resolver invariant violated: requested '$Name', but Find-PSResource returned '$($resource.Name)'."
-    }
-
-    if ($null -ne $Version) {
-        if ([string]$resource.Version -ne [string]$Version) {
-            throw "Resolver invariant violated: requested version '$Version', but Find-PSResource returned '$($resource.Version)'."
-        }
-    }
-
-    $requiredResource = @{}
-
-    $dependencies = @($resource.Dependencies)
-
-    Write-Host "Dependency count: $($dependencies.Count)"
-
-    foreach ($dependency in $dependencies) {
-        Write-Host '--- DEPENDENCY ---'
-        Write-Host "Name: [$($dependency.Name)]"
-        Write-Host "VersionRange: [$($dependency.VersionRange)]"
-
-        if ($null -eq $dependency.VersionRange) {
-            Write-Host 'VersionRange is NULL.'
-        }
-        else {
-            Write-Host "VersionRange type: [$($dependency.VersionRange.GetType().FullName)]"
-            Write-Host "VersionRange string: [$([string]$dependency.VersionRange)]"
-        }
-
-        Write-Host "Repository: [$($dependency.Repository)]"
-        Write-Host "Dependency type: [$($dependency.GetType().FullName)]"
-
-        if (-not $dependency.Name) {
-            Write-Host 'Skipping dependency with no name.'
-            continue
-        }
-
-        if (-not $dependency.VersionRange) {
-            throw "Resolver invariant violated: dependency '$($dependency.Name)' has no VersionRange."
-        }
-
-        $dependencyVersion = [string]$dependency.VersionRange
-
-        Write-Host "Dependency version specification: [$dependencyVersion]"
-
-        $dependencySpec = @{
-            version = $dependencyVersion
-        }
-
-        if ($dependency.Repository) {
-            $dependencySpec['repository'] = [string]$dependency.Repository
-        }
-
-        Write-Host 'RequiredResource entry:'
-        foreach ($key in $dependencySpec.Keys) {
-            Write-Host "  $key = [$($dependencySpec[$key])]"
-        }
-
-        $requiredResource[[string]$dependency.Name] = $dependencySpec
-
-        Write-Host '--- END DEPENDENCY ---'
-    }
-
-    Write-Host '=== RESOLVER OUTPUT ==='
-
-    if ($requiredResource.Count -eq 0) {
-        Write-Host 'RequiredResource is empty.'
+        $selectedVersion = [string]$BoundParameters['Version']
     }
     else {
-        foreach ($dependencyName in $requiredResource.Keys) {
-            $dependencySpec = $requiredResource[$dependencyName]
+        Write-Host 'No version supplied; resolving root resource with Find-PSResource.'
 
-            Write-Host "  $dependencyName"
+        $findParameters = @{
+            Name        = $amiaseaName
+            Repository  = 'Amiasea'
+            ErrorAction = 'Stop'
+        }
 
-            foreach ($key in $dependencySpec.Keys) {
-                Write-Host "    $key = [$($dependencySpec[$key])]"
-            }
+        if ($BoundParameters.ContainsKey('Prerelease')) {
+            $findParameters['Prerelease'] = $BoundParameters['Prerelease']
+        }
+
+        $resource = Find-PSResource @findParameters |
+            Select-Object -First 1
+
+        if ($null -eq $resource) {
+            throw "Amiasea resource '$amiaseaName' could not be found."
+        }
+
+        Write-Host 'Resolved root resource:'
+        Write-Host "  Name: [$($resource.Name)]"
+        Write-Host "  Version: [$($resource.Version)]"
+        Write-Host "  Prerelease: [$($resource.Prerelease)]"
+        Write-Host "  Repository: [$($resource.Repository)]"
+
+        $selectedVersion = [string]$resource.Version
+
+        Write-Host "Selected version: [$selectedVersion]"
+
+        if ($resource.Prerelease) {
+            $selectedVersion += "-$($resource.Prerelease)"
         }
     }
 
-    Write-Host '=== END RESOLVER ==='
+    Write-Host "Calling Resolve-AmiaseaRequiredResource:"
+    Write-Host "  Name: [$amiaseaName]"
+    Write-Host "  Version: [$selectedVersion]"
 
-    return ,$requiredResource
+    $requiredResource = Resolve-AmiaseaRequiredResource `
+        -Name $amiaseaName `
+        -Version $selectedVersion
+
+    Write-Host 'Resolved dependencies:'
+
+    foreach ($dependencyName in $requiredResource.Keys) {
+        $dependency = $requiredResource[$dependencyName]
+
+        Write-Host "  $dependencyName"
+        Write-Host "    version: [$($dependency['version'])]"
+        Write-Host "    repository: [$($dependency['repository'])]"
+    }
+
+    $result = @{}
+
+    foreach ($key in $BoundParameters.Keys) {
+        $result[$key] = $BoundParameters[$key]
+    }
+
+    $result.Remove('Name')
+    $result.Remove('Version')
+    $result.Remove('Repository')
+
+    $result['RequiredResource'] = @{
+        $amiaseaName = @{
+            version    = $selectedVersion
+            repository = 'Amiasea'
+        }
+    }
+
+    foreach ($dependencyName in $requiredResource.Keys) {
+        $result['RequiredResource'][$dependencyName] =
+            $requiredResource[$dependencyName]
+    }
+
+    Write-Host 'Final RequiredResource:'
+
+    foreach ($name in $result['RequiredResource'].Keys) {
+        $spec = $result['RequiredResource'][$name]
+
+        Write-Host "  $name"
+        Write-Host "    version: [$($spec['version'])]"
+        Write-Host "    repository: [$($spec['repository'])]"
+    }
+
+    Write-Host 'Top-level parameters remaining:'
+
+    foreach ($key in $result.Keys) {
+        Write-Host "  $key"
+    }
+
+    if ($result.ContainsKey('Name')) {
+        throw 'Amiasea converter invariant violated: Name remains in transformed parameters.'
+    }
+
+    if ($result.ContainsKey('Version')) {
+        throw 'Amiasea converter invariant violated: Version remains in transformed parameters.'
+    }
+
+    if ($result.ContainsKey('Repository')) {
+        throw 'Amiasea converter invariant violated: Repository remains in transformed parameters.'
+    }
+
+    if (-not $result.ContainsKey('RequiredResource')) {
+        throw 'Amiasea converter invariant violated: RequiredResource was not produced.'
+    }
+
+    if (-not $result['RequiredResource'].ContainsKey($amiaseaName)) {
+        throw "Amiasea converter invariant violated: root resource '$amiaseaName' is missing."
+    }
+
+    $rootSpec = $result['RequiredResource'][$amiaseaName]
+
+    if ($rootSpec['version'] -ne $selectedVersion) {
+        throw "Amiasea converter invariant violated: root version '$($rootSpec['version'])' does not equal selected version '$selectedVersion'."
+    }
+
+    if ($rootSpec['repository'] -ne 'Amiasea') {
+        throw "Amiasea converter invariant violated: root repository is '$($rootSpec['repository'])'."
+    }
+
+    Write-Host '=== END AMIASEA CONVERTER ==='
+
+    return ,$result
 }

@@ -61,7 +61,15 @@ function Resolve-AmiaseaRequiredResource {
         Write-Host '--- DEPENDENCY ---'
         Write-Host "Name: [$($dependency.Name)]"
         Write-Host "VersionRange: [$($dependency.VersionRange)]"
-        Write-Host "VersionRange type: [$($dependency.VersionRange.GetType().FullName)]"
+
+        if ($null -eq $dependency.VersionRange) {
+            Write-Host 'VersionRange is NULL.'
+        }
+        else {
+            Write-Host "VersionRange type: [$($dependency.VersionRange.GetType().FullName)]"
+            Write-Host "VersionRange string: [$([string]$dependency.VersionRange)]"
+        }
+
         Write-Host "Repository: [$($dependency.Repository)]"
         Write-Host "Dependency type: [$($dependency.GetType().FullName)]"
 
@@ -74,8 +82,12 @@ function Resolve-AmiaseaRequiredResource {
             throw "Resolver invariant violated: dependency '$($dependency.Name)' has no VersionRange."
         }
 
+        $dependencyVersion = [string]$dependency.VersionRange
+
+        Write-Host "Dependency version specification: [$dependencyVersion]"
+
         $dependencySpec = @{
-            version = [string]$dependency.VersionRange
+            version = $dependencyVersion
         }
 
         if ($dependency.Repository) {
