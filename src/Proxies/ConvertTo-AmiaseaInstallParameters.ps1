@@ -70,6 +70,7 @@ function ConvertTo-AmiaseaInstallParameters {
 
     $result.Remove('Name')
     $result.Remove('Version')
+    $result.Remove('Repository')
 
     $result['RequiredResource'] = @{
         $amiaseaName = @{
