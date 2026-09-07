@@ -47,7 +47,9 @@ begin
             [System.Management.Automation.CommandTypes]::Cmdlet
         )
 
-        $scriptCmd = {& $wrappedCmd @PSBoundParameters }
+        $scriptCmd = {
+            & $wrappedCmd @PSBoundParameters
+        }
 
         $steppablePipeline = $scriptCmd.GetSteppablePipeline(
             $myInvocation.CommandOrigin

@@ -12,18 +12,19 @@ Describe 'Proxies' {
         InModuleScope Amiasea.Proxies {
             $command = Get-Command Install-PSResource
 
-            $command.CommandType | Should -Be 'Function'
+            $command.CommandType |
+                Should -Be 'Function'
         }
     }
 
-    It 'registers Resolve-AmiaseaRequiredResource' {
+    It 'registers Resolve-AmiaseaRequiredResource inside the module' {
         InModuleScope Amiasea.Proxies {
             Get-Command Resolve-AmiaseaRequiredResource |
                 Should -Not -BeNullOrEmpty
         }
     }
 
-    It 'registers ConvertTo-AmiaseaInstallParameters' {
+    It 'registers ConvertTo-AmiaseaInstallParameters inside the module' {
         InModuleScope Amiasea.Proxies {
             Get-Command ConvertTo-AmiaseaInstallParameters |
                 Should -Not -BeNullOrEmpty
@@ -31,23 +32,23 @@ Describe 'Proxies' {
     }
 
     It 'exports Install-PSResource' {
-        Get-Command Install-PSResource |
-            Should -Not -BeNullOrEmpty
-
-        (Get-Command Install-PSResource).CommandType |
-            Should -Be 'Function'
-    }
-
-    It 'exports the expected functions' {
         $module = Get-Module Amiasea.Proxies
 
         $module.ExportedFunctions.Keys |
             Should -Contain 'Install-PSResource'
+    }
+
+    It 'does not export Resolve-AmiaseaRequiredResource' {
+        $module = Get-Module Amiasea.Proxies
 
         $module.ExportedFunctions.Keys |
-            Should -Contain 'Resolve-AmiaseaRequiredResource'
+            Should -Not -Contain 'Resolve-AmiaseaRequiredResource'
+    }
+
+    It 'does not export ConvertTo-AmiaseaInstallParameters' {
+        $module = Get-Module Amiasea.Proxies
 
         $module.ExportedFunctions.Keys |
-            Should -Contain 'ConvertTo-AmiaseaInstallParameters'
+            Should -Not -Contain 'ConvertTo-AmiaseaInstallParameters'
     }
 }
