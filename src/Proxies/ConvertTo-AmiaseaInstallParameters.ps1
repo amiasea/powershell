@@ -12,12 +12,7 @@ function ConvertTo-AmiaseaInstallParameters {
         return $null
     }
 
-    $names = if ($BoundParameters['Name'] -is [string]) {
-        @($BoundParameters['Name'])
-    }
-    else {
-        @($BoundParameters['Name'])
-    }
+    $names = @($BoundParameters['Name'])
 
     $amiaseaNames = @(
         $names | Where-Object {
