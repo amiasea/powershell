@@ -156,10 +156,14 @@ jobs:
 
           Write-Host ""
           Write-Host "Running unit tests..."
+          Write-Host
 
-          Invoke-Pester `
-              -Path $unitTestDirectories `
-              -Output Detailed
+          $config = New-PesterConfiguration
+
+          $config.Run.Path = $unitTestDirectories
+          $config.Output.Verbosity = 'Detailed'
+
+          Invoke-Pester -Configuration $config
 
 
   prepare:
@@ -956,10 +960,15 @@ jobs:
 
           Write-Host ""
           Write-Host "Running E2E tests..."
+          Write-Host
 
-          Invoke-Pester `
-              -Path $e2eTestPath `
-              -Output Detailed
+          $config = New-PesterConfiguration
+
+          $config.Run.Path = $e2eTestPath
+          $config.Output.Verbosity = 'Detailed'
+          $config.Mock.Global = $true
+
+          Invoke-Pester -Configuration $config
 
 
   publish:
