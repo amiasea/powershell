@@ -12,18 +12,19 @@ function ConvertTo-AmiaseaInstallParameters {
         return $null
     }
 
-    $names = $BoundParameters['Name']
-
-    if ($names -is [string]) {
-        $amiaseaNames = @($names)
+    $names = if ($BoundParameters['Name'] -is [string]) {
+        @($BoundParameters['Name'])
     }
     else {
-        $amiaseaNames = @($names) |
-            Where-Object {
-                $_ -is [string] -and
-                $_ -match '^Amiasea\.'
-            }
+        @($BoundParameters['Name'])
     }
+
+    $amiaseaNames = @(
+        $names | Where-Object {
+            $_ -is [string] -and
+            $_ -match '^Amiasea\.'
+        }
+    )
 
     if ($amiaseaNames.Count -eq 0) {
         return $null
@@ -34,9 +35,6 @@ function ConvertTo-AmiaseaInstallParameters {
     }
 
     $amiaseaName = [string]$amiaseaNames[0]
-
-    Write-Host "DEBUG Name type: $($BoundParameters['Name'].GetType().FullName)"
-    Write-Host "DEBUG Name value: <$($BoundParameters['Name'])>"
 
     $findParameters = @{
         Name        = $amiaseaName
