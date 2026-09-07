@@ -26,6 +26,13 @@ begin
             }
         }
 
+        Write-Host '=== AMIASEA PROXY PARAMETERS ===' -ForegroundColor Cyan
+        $PSBoundParameters.GetEnumerator() |
+            ForEach-Object {
+                Write-Host "$($_.Key) = $($_.Value | Out-String)"
+            }
+        Write-Host '=== END AMIASEA PROXY PARAMETERS ===' -ForegroundColor Cyan
+
         $outBuffer = $null
         if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$outBuffer))
         {
