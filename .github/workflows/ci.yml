@@ -445,6 +445,8 @@ jobs:
         run: |
           $modulePath = Join-Path $PWD "src/$env:MODULE"
           $metadataPath = Join-Path $modulePath "$env:MODULE.json"
+          $sourceRootModulePath = Join-Path $modulePath "$env:MODULE.psm1"
+
           $buildPath = Join-Path $PWD ".build/$env:MODULE"
           $outPath = Join-Path $buildPath "out"
 
@@ -456,6 +458,10 @@ jobs:
 
           if (-not (Test-Path $metadataPath -PathType Leaf)) {
               throw "Module metadata not found: $metadataPath"
+          }
+
+          if (-not (Test-Path $sourceRootModulePath -PathType Leaf)) {
+              throw "Source module file not found: $sourceRootModulePath"
           }
 
           if (-not (Test-Path $rootModulePath -PathType Leaf)) {
@@ -470,6 +476,90 @@ jobs:
           }
 
           $guid = [Guid]$metadata.guid
+
+          #
+          # Discover the module's explicit exports from the raw source
+          # .psm1. Do not import the module: the source is authoritative
+          # and parsing avoids executing module code or dependencies.
+          #
+          $tokens = $null
+          $errors = $null
+
+          $sourceAst = [System.Management.Automation.Language.Parser]::ParseFile(
+              $sourceRootModulePath,
+              [ref]$tokens,
+              [ref]$errors
+          )
+
+          if ($errors.Count -gt 0) {
+              throw "Module failed to parse: $($errors[0].Message)"
+          }
+
+          $functionsToExport = @(
+              foreach ($statement in @(
+                  $sourceAst.FindAll(
+                      {
+                          param($node)
+
+                          $node -is [System.Management.Automation.Language.CommandAst] -and
+                          $node.GetCommandName() -eq 'Export-ModuleMember'
+                      },
+                      $true
+                  )
+              )) {
+                  $elements = @($statement.CommandElements)
+
+                  for ($i = 1; $i -lt $elements.Count; $i++) {
+                      $element = $elements[$i]
+
+                      if (
+                          $element -is [System.Management.Automation.Language.CommandParameterAst] -and
+                          $element.ParameterName -eq 'Function'
+                      ) {
+                          for ($j = $i + 1; $j -lt $elements.Count; $j++) {
+                              $next = $elements[$j]
+
+                              if (
+                                  $next -is [System.Management.Automation.Language.CommandParameterAst]
+                              ) {
+                                  break
+                              }
+
+                              if (
+                                  $next -is [System.Management.Automation.Language.StringConstantExpressionAst] -or
+                                  $next -is [System.Management.Automation.Language.ExpandableStringExpressionAst]
+                              ) {
+                                  [string]$next.Value
+                                  continue
+                              }
+
+                              if ($next -is [System.Management.Automation.Language.ArrayLiteralAst]) {
+                                  foreach ($elementAst in @($next.Elements)) {
+                                      if (
+                                          $elementAst -is [System.Management.Automation.Language.StringConstantExpressionAst] -or
+                                          $elementAst -is [System.Management.Automation.Language.ExpandableStringExpressionAst]
+                                      ) {
+                                          [string]$elementAst.Value
+                                          continue
+                                      }
+
+                                      throw "Export-ModuleMember -Function in '$sourceRootModulePath' must contain literal function names."
+                                  }
+
+                                  continue
+                              }
+
+                              throw "Export-ModuleMember -Function in '$sourceRootModulePath' must contain literal function names."
+                          }
+                      }
+                  }
+              }
+          ) | Sort-Object -Unique
+
+          Write-Host "Functions to export:"
+          foreach ($function in $functionsToExport) {
+              Write-Host "  $function"
+          }
 
           $requiredModules = @(
               foreach ($requiredModule in @($metadata.requiredModules)) {
@@ -507,6 +597,7 @@ jobs:
               }
           )
 
+          Write-Host ""
           Write-Host "Required PowerShell modules:"
           foreach ($requiredModule in $requiredModules) {
               Write-Host "  $($requiredModule.ModuleName) $($requiredModule.ModuleVersion)"
@@ -531,10 +622,7 @@ jobs:
               -CompatiblePSEditions 'Core' `
               -RequiredModules $requiredModules `
               -RequiredAssemblies $requiredAssemblies `
-              -FunctionsToExport @(
-                  "Resolve-$env:MODULE"
-                  "Build-$env:MODULE"
-              ) `
+              -FunctionsToExport $functionsToExport `
               -CmdletsToExport @() `
               -AliasesToExport @() `
               -VariablesToExport @() `
