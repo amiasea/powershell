@@ -19,7 +19,11 @@ begin
             -BoundParameters $PSBoundParameters
 
         if ($null -ne $amiaseaParameters) {
-            $PSBoundParameters = $amiaseaParameters
+            $PSBoundParameters.Clear()
+
+            foreach ($key in $amiaseaParameters.Keys) {
+                $PSBoundParameters[$key] = $amiaseaParameters[$key]
+            }
         }
 
         $outBuffer = $null
