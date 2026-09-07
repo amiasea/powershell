@@ -42,7 +42,7 @@ jobs:
                   -Directory `
                   -Recurse |
                   Where-Object {
-                      $_.Name -eq 'unit'
+                      $_.Name -ieq 'unit'
                   }
           )
 
@@ -53,13 +53,24 @@ jobs:
           $requiredModules = @{}
 
           foreach ($unitTestPath in $unitTestPaths) {
-              $moduleName = $unitTestPath.Parent.Name
-              $modulePath = Join-Path `
-                  $PWD `
-                  "src/$moduleName"
+              $moduleDirectoryName = $unitTestPath.Parent.Name
+
+              $moduleDirectory = Get-ChildItem `
+                  -Path $PWD/src `
+                  -Directory |
+                  Where-Object {
+                      $_.Name -ieq $moduleDirectoryName
+                  } |
+                  Select-Object -First 1
+
+              if ($null -eq $moduleDirectory) {
+                  throw "Source module directory not found for unit test directory: $($unitTestPath.Parent.FullName)"
+              }
+
+              $moduleName = $moduleDirectory.Name
 
               $metadataPath = Join-Path `
-                  $modulePath `
+                  $moduleDirectory.FullName `
                   "$moduleName.json"
 
               if (-not (Test-Path $metadataPath -PathType Leaf)) {
