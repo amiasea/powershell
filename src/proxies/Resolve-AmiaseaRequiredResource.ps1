@@ -86,12 +86,44 @@ function Resolve-AmiaseaRequiredResource {
 
         Write-Host "Dependency version specification: [$dependencyVersion]"
 
-        $dependencySpec = @{
-            version = $dependencyVersion
+        if ($dependency.Repository) {
+            $dependencyRepository = [string]$dependency.Repository
+        }
+        else {
+            Write-Host "Dependency repository not specified; resolving repository for [$($dependency.Name)]."
+
+            $dependencyFindParameters = @{
+                Name        = [string]$dependency.Name
+                Version     = $dependencyVersion
+                ErrorAction = 'Stop'
+            }
+
+            $dependencyResource = Find-PSResource @dependencyFindParameters |
+                Select-Object -First 1
+
+            if ($null -eq $dependencyResource) {
+                throw "Dependency '$($dependency.Name)' with version '$dependencyVersion' could not be found in any registered repository."
+            }
+
+            Write-Host 'Resolved dependency resource:'
+            Write-Host "  Name: [$($dependencyResource.Name)]"
+            Write-Host "  Version: [$($dependencyResource.Version)]"
+            Write-Host "  Repository: [$($dependencyResource.Repository)]"
+
+            if (-not $dependencyResource.Repository) {
+                throw "Resolver invariant violated: dependency '$($dependency.Name)' resolved without a repository."
+            }
+
+            $dependencyRepository = [string]$dependencyResource.Repository
         }
 
-        if ($dependency.Repository) {
-            $dependencySpec['repository'] = [string]$dependency.Repository
+        if (-not $dependencyRepository) {
+            throw "Resolver invariant violated: dependency '$($dependency.Name)' has no repository."
+        }
+
+        $dependencySpec = @{
+            version    = $dependencyVersion
+            repository = $dependencyRepository
         }
 
         Write-Host 'RequiredResource entry:'

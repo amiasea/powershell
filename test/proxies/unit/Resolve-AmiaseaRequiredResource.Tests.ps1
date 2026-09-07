@@ -193,19 +193,37 @@ Describe 'Resolve-AmiaseaRequiredResource' {
             Should -Be 'Amiasea'
     }
 
-    It 'omits the repository when a dependency has no repository' {
+    It 'resolves a dependency repository when one is not supplied' {
         Mock Find-PSResource {
-            [pscustomobject]@{
-                Name         = 'Amiasea.Workspace'
-                Version      = '1.2.3'
-                Prerelease   = $null
-                Dependencies = @(
-                    [pscustomobject]@{
-                        Name         = 'Amiasea.Shared'
-                        VersionRange = '2.0.0'
-                        Repository   = $null
-                    }
-                )
+            param(
+                [string]$Name,
+                [object]$Version,
+                [string]$Repository
+            )
+
+            if ($Name -eq 'Amiasea.Workspace') {
+                return [pscustomobject]@{
+                    Name         = 'Amiasea.Workspace'
+                    Version      = '1.2.3'
+                    Prerelease   = $null
+                    Dependencies = @(
+                        [pscustomobject]@{
+                            Name         = 'PowerShellForGitHub'
+                            VersionRange = '[0.17.0,0.18.0)'
+                            Repository   = $null
+                        }
+                    )
+                }
+            }
+
+            if ($Name -eq 'PowerShellForGitHub') {
+                return [pscustomobject]@{
+                    Name         = 'PowerShellForGitHub'
+                    Version      = '0.17.0'
+                    Prerelease   = $null
+                    Dependencies = @()
+                    Repository   = 'PSGallery'
+                }
             }
         }
 
@@ -213,10 +231,149 @@ Describe 'Resolve-AmiaseaRequiredResource' {
             -Name 'Amiasea.Workspace' `
             -Version '1.2.3'
 
-        $result['Amiasea.Shared'].version |
-            Should -Be '2.0.0'
+        $result['PowerShellForGitHub'].version |
+            Should -Be '[0.17.0,0.18.0)'
 
-        $result['Amiasea.Shared'].ContainsKey('repository') |
-            Should -BeFalse
+        $result['PowerShellForGitHub'].ContainsKey('repository') |
+            Should -BeTrue
+
+        $result['PowerShellForGitHub'].repository |
+            Should -Be 'PSGallery'
+
+        Should -Invoke Find-PSResource `
+            -Times 1 `
+            -Exactly `
+            -ParameterFilter {
+                $Name -eq 'PowerShellForGitHub' -and
+                $Version -eq '[0.17.0,0.18.0)' -and
+                $ErrorAction -eq 'Stop'
+            }
+    }
+
+    It 'requires every dependency to have an explicit repository' {
+        Mock Find-PSResource {
+            param(
+                [string]$Name
+            )
+
+            if ($Name -eq 'Amiasea.Workspace') {
+                return [pscustomobject]@{
+                    Name         = 'Amiasea.Workspace'
+                    Version      = '1.2.3'
+                    Prerelease   = $null
+                    Dependencies = @(
+                        [pscustomobject]@{
+                            Name         = 'PowerShellForGitHub'
+                            VersionRange = '[0.17.0,0.18.0)'
+                            Repository   = $null
+                        }
+                        [pscustomobject]@{
+                            Name         = 'Amiasea.Shared'
+                            VersionRange = '[2.0.0,3.0.0)'
+                            Repository   = 'Amiasea'
+                        }
+                    )
+                }
+            }
+
+            if ($Name -eq 'PowerShellForGitHub') {
+                return [pscustomobject]@{
+                    Name         = 'PowerShellForGitHub'
+                    Version      = '0.17.0'
+                    Prerelease   = $null
+                    Dependencies = @()
+                    Repository   = 'PSGallery'
+                }
+            }
+        }
+
+        $result = Resolve-AmiaseaRequiredResource `
+            -Name 'Amiasea.Workspace' `
+            -Version '1.2.3'
+
+        foreach ($dependencyName in $result.Keys) {
+            $result[$dependencyName].ContainsKey('repository') |
+                Should -BeTrue
+
+            $result[$dependencyName].repository |
+                Should -Not -BeNullOrEmpty
+        }
+    }
+
+    It 'rejects a dependency that cannot be resolved to a repository' {
+        Mock Find-PSResource {
+            param(
+                [string]$Name
+            )
+
+            if ($Name -eq 'Amiasea.Workspace') {
+                return [pscustomobject]@{
+                    Name         = 'Amiasea.Workspace'
+                    Version      = '1.2.3'
+                    Prerelease   = $null
+                    Dependencies = @(
+                        [pscustomobject]@{
+                            Name         = 'Unknown.Dependency'
+                            VersionRange = '[1.0.0,2.0.0)'
+                            Repository   = $null
+                        }
+                    )
+                }
+            }
+
+            $null
+        }
+
+        try {
+            Resolve-AmiaseaRequiredResource `
+                -Name 'Amiasea.Workspace' `
+                -Version '1.2.3'
+
+            throw 'Expected Resolve-AmiaseaRequiredResource to throw.'
+        }
+        catch {
+            $_.Exception.Message |
+                Should -Be "Dependency 'Unknown.Dependency' with version '[1.0.0,2.0.0)' could not be found in any registered repository."
+        }
+    }
+
+    It 'rejects a dependency resource that has no repository' {
+        Mock Find-PSResource {
+            param(
+                [string]$Name
+            )
+
+            if ($Name -eq 'Amiasea.Workspace') {
+                return [pscustomobject]@{
+                    Name         = 'Amiasea.Workspace'
+                    Version      = '1.2.3'
+                    Prerelease   = $null
+                    Dependencies = @(
+                        [pscustomobject]@{
+                            Name         = 'Unknown.Dependency'
+                            VersionRange = '[1.0.0,2.0.0)'
+                            Repository   = $null
+                        }
+                    )
+                }
+            }
+
+            if ($Name -eq 'Unknown.Dependency') {
+                return [pscustomobject]@{
+                    Name         = 'Unknown.Dependency'
+                    Version      = '1.0.0'
+                    Prerelease   = $null
+                    Dependencies = @()
+                    Repository   = $null
+                }
+            }
+        }
+
+        {
+            Resolve-AmiaseaRequiredResource `
+                -Name 'Amiasea.Workspace' `
+                -Version '1.2.3'
+        } | Should -Throw `
+            "Resolver invariant violated: dependency 'Unknown.Dependency' resolved without a repository."
     }
 }
