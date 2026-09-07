@@ -69,35 +69,49 @@ Describe 'ConvertTo-AmiaseaInstallParameters' {
         }
     }
 
-    It 'forwards an explicit version to Find-PSResource' {
-        InModuleScope Amiasea.Proxies {
-            Mock Find-PSResource {
-                [pscustomobject]@{
-                    Name         = 'Amiasea.Workspace'
-                    Version      = '1.2.3'
-                    Prerelease   = $null
-                    Dependencies = @()
-                }
-            }
-
-            Mock Resolve-AmiaseaRequiredResource {
-                return ,@{}
-            }
-
-            $result = ConvertTo-AmiaseaInstallParameters @{
-                Name    = 'Amiasea.Workspace'
-                Version = '1.2.3'
-            }
-
-            Should -Invoke Find-PSResource `
-                -Times 1 `
-                -Exactly `
-                -ParameterFilter {
-                    $Name -eq 'Amiasea.Workspace' -and
-                    $Repository -eq 'Amiasea' -and
-                    $Version -eq '1.2.3'
-                }
+    It 'uses an explicit version without resolving the root resource' {
+        $parameters = @{
+            Name    = 'Amiasea.Workspace'
+            Version = '1.2.3'
         }
+
+        Mock Find-PSResource {
+            throw 'Find-PSResource should not be called when an explicit version is supplied.'
+        }
+
+        Mock Resolve-AmiaseaRequiredResource {
+            param(
+                [string]$Name,
+                [object]$Version
+            )
+
+            return @{
+                'Amiasea.Shared' = @{
+                    version    = '2.0.0'
+                    repository = 'Amiasea'
+                }
+            }
+        }
+
+        $result = ConvertTo-AmiaseaInstallParameters `
+            -BoundParameters $parameters
+
+        $result['RequiredResource']['Amiasea.Workspace']['version'] |
+            Should -Be '1.2.3'
+
+        Should -Invoke Resolve-AmiaseaRequiredResource `
+            -ModuleName Amiasea.Proxies `
+            -Times 1 `
+            -Exactly `
+            -ParameterFilter {
+                $Name -eq 'Amiasea.Workspace' -and
+                $Version -eq '1.2.3'
+            }
+
+        Should -Invoke Find-PSResource `
+            -ModuleName Amiasea.Proxies `
+            -Times 0 `
+            -Exactly
     }
 
     It 'forwards Prerelease to Find-PSResource' {
