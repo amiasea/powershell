@@ -85,12 +85,7 @@ Describe 'ConvertTo-AmiaseaInstallParameters' {
                 [object]$Version
             )
 
-            return @{
-                'Amiasea.Shared' = @{
-                    version    = '2.0.0'
-                    repository = 'Amiasea'
-                }
-            }
+            return @{}
         }
 
         $result = ConvertTo-AmiaseaInstallParameters `
@@ -98,6 +93,9 @@ Describe 'ConvertTo-AmiaseaInstallParameters' {
 
         $result['RequiredResource']['Amiasea.Workspace']['version'] |
             Should -Be '1.2.3'
+
+        $result['RequiredResource']['Amiasea.Workspace']['repository'] |
+            Should -Be 'Amiasea'
 
         Should -Invoke Resolve-AmiaseaRequiredResource `
             -ModuleName Amiasea.Proxies `
